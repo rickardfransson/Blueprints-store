@@ -1,0 +1,39 @@
+name: Kontrollera integrationen
+
+on:
+  push:
+    branches: [main]
+    paths: ["custom_components/**", "tests/**", "hacs.json", ".github/workflows/validate.yml"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hassfest:
+    name: Home Assistants egen kontroll (hassfest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS-kontroll
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # Ikonen i Home Assistants "brands"-repo läggs till senare.
+          ignore: brands
+
+  tests:
+    name: Tester mot riktig Home Assistant
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Installera Home Assistant och testverktyg
+        run: pip install pytest-homeassistant-custom-component
+      - name: Kör tester
+        run: python -m pytest -v tests
