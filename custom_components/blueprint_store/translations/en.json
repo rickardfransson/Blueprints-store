@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Blueprint Store",
+        "description": "Adds a Blueprint Store page to the sidebar where you can search and install community blueprints."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Blueprint Store is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Blueprint Store",
+        "data": {
+          "index_url": "Catalog URL (index.json)"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "The address must start with https://"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Blueprint Store",
+        "description": "Lägger till sidan Blueprint Store i sidomenyn, där du kan söka efter och installera blueprints från communityn."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Blueprint Store är redan installerad."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Blueprint Store",
+        "data": {
+          "index_url": "Adress till katalogen (index.json)"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "Adressen måste börja med https://"
+    }
+  }
+}
