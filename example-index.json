@@ -1,0 +1,133 @@
+{
+ "schema_version": 1,
+ "generated_at": "2026-10-31T07:36:55+00:00",
+ "note": "EXEMPEL byggt från testdata, inte riktiga forumdata",
+ "stats": {
+  "topics_seen": 6,
+  "blueprints": 3,
+  "topics_without_import_link": 1,
+  "errors": 1
+ },
+ "blueprints": [
+  {
+   "id": "b78f783be600",
+   "source_url": "https://github.com/alice/blueprints/blob/main/automation/motion.yaml",
+   "source_type": "github",
+   "name": "Motion light (ZHA)",
+   "description": "Tänd lampan vid rörelse",
+   "domain": "automation",
+   "author": "Alice",
+   "min_ha_version": "2024.6.0",
+   "inputs": [
+    {
+     "key": "motion",
+     "name": "Rörelsesensor",
+     "selector": "entity",
+     "required": true
+    },
+    {
+     "key": "light",
+     "name": "Lampa",
+     "selector": "target",
+     "required": true
+    },
+    {
+     "key": "delay",
+     "name": "Fördröjning",
+     "selector": "number",
+     "required": false
+    }
+   ],
+   "requires_integrations": [
+    "zha"
+   ],
+   "requires_domains": [
+    "binary_sensor",
+    "light"
+   ],
+   "sha256": "1d6f73be56d57316ec3f5d0aad62f974352acf4f6288f75e8babdc935702eb41",
+   "topic": {
+    "id": 1001,
+    "url": "https://community.home-assistant.io/t/topic-1001/1001",
+    "title": "T",
+    "tags": [
+     "automation"
+    ],
+    "likes": 50,
+    "views": 10,
+    "created_at": "2026-01-01T00:00:00Z",
+    "bumped_at": "2026-10-01",
+    "poster": "u"
+   }
+  },
+  {
+   "id": "d7d2edd94ec0",
+   "source_url": "https://gist.github.com/bob/abc123def",
+   "source_type": "gist",
+   "name": "Notify everyone",
+   "description": "",
+   "domain": "script",
+   "author": null,
+   "min_ha_version": null,
+   "inputs": [
+    {
+     "key": "msg",
+     "name": "Meddelande",
+     "selector": "text",
+     "required": true
+    }
+   ],
+   "requires_integrations": [],
+   "requires_domains": [],
+   "sha256": "4a35ccf7d6fe0f9717f8329f1e26efbebc92d89093d19327a2058c7d6437ba8a",
+   "topic": {
+    "id": 1005,
+    "url": "https://community.home-assistant.io/t/topic-1005/1005",
+    "title": "T",
+    "tags": [
+     "automation"
+    ],
+    "likes": 7,
+    "views": 10,
+    "created_at": "2026-01-01T00:00:00Z",
+    "bumped_at": "2026-10-01",
+    "poster": "u"
+   }
+  },
+  {
+   "id": "9733f8937fd5",
+   "source_url": "https://community.home-assistant.io/t/simple-forum-blueprint/1002",
+   "source_type": "forum",
+   "name": "Forum & friends",
+   "description": "",
+   "domain": "automation",
+   "author": null,
+   "min_ha_version": null,
+   "inputs": [],
+   "requires_integrations": [],
+   "requires_domains": [],
+   "sha256": "d27026bd0e0edb3da2225d53e07a437413f507493cba4b2ef651dd89a9c793d8",
+   "topic": {
+    "id": 1002,
+    "url": "https://community.home-assistant.io/t/topic-1002/1002",
+    "title": "T",
+    "tags": [
+     "automation"
+    ],
+    "likes": 3,
+    "views": 10,
+    "created_at": "2026-01-01T00:00:00Z",
+    "bumped_at": "2026-10-01",
+    "poster": "u"
+   }
+  }
+ ],
+ "errors": [
+  {
+   "topic": "https://community.home-assistant.io/t/topic-1004/1004",
+   "source_url": "https://github.com/carol/bp/blob/main/broken.yaml",
+   "stage": "blueprint",
+   "error": "while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 12:\n    blueprint: [oj\n               ^\nexpected ',' or ']', but got '<stream end>'\n  in \"<unicode string>\", line 2, column 1:\n    \n    ^"
+  }
+ ]
+}
