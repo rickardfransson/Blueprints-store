@@ -1,0 +1,70 @@
+name: Bygg blueprint-katalog
+
+on:
+  schedule:
+    - cron: "17 3 * * *"     # varje natt 03:17 UTC
+  workflow_dispatch:          # gör att du kan starta den manuellt i GitHub
+    inputs:
+      max_pages:
+        description: "Antal trådlistsidor att läsa (ca 30 trådar/sida)"
+        default: "5"
+  push:
+    branches: [main]
+    paths: ["indexer/**", ".github/workflows/build-index.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installera beroenden
+        run: pip install -r indexer/requirements.txt pytest
+
+      - name: Kör tester
+        working-directory: indexer
+        run: python -m pytest -q
+
+      - name: Hämta förra katalogen (så oförändrade trådar inte hämtas igen)
+        run: |
+          mkdir -p site
+          curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/index.json" \
+            -o previous.json || echo "Ingen tidigare katalog, bygger från början."
+
+      - name: Bygg katalogen
+        run: |
+          python indexer/build_index.py \
+            --previous previous.json \
+            --max-pages "${{ github.event.inputs.max_pages || '5' }}" \
+            --out site/index.json
+
+      - name: Sammanfattning
+        run: |
+          python -c "import json; s=json.load(open('site/index.json'))['stats']; print(s)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
