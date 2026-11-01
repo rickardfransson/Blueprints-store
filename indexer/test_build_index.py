@@ -203,11 +203,39 @@ def test_rejects_non_blueprint():
         bi.describe_blueprint("blueprint:\n  name: x\n  domain: lights\n")
 
 
-def test_token_only_sent_to_github_api():
-    f = bi.HttpFetcher(github_token="secret")
-    assert f.headers_for("https://api.github.com/gists/abc")["Authorization"] == "Bearer secret"
-    for url in ("https://raw.githubusercontent.com/a/b/main/x.yaml",
-                "https://community.home-assistant.io/t/1.json",
-                "https://api.github.com.evil.example/x"):
-        assert f.headers_for(url) == {}
-    assert bi.HttpFetcher().headers_for("https://api.github.com/gists/abc") == {}
+
+def test_gist_is_fetched_as_plain_text_without_api():
+    fetch = FakeFetch({
+        "https://gist.githubusercontent.com/kim/abc123/raw": SCRIPT_YAML,
+    })
+    assert bi.fetch_blueprint_yaml("https://gist.github.com/kim/abc123", fetch) == SCRIPT_YAML
+    assert not any("api.github.com" in u for u in fetch.calls)
+
+
+def test_gist_without_user_in_url():
+    fetch = FakeFetch({"https://gist.github.com/abc123/raw": SCRIPT_YAML})
+    assert bi.fetch_blueprint_yaml("https://gist.github.com/abc123", fetch) == SCRIPT_YAML
+
+
+def test_gist_with_several_files_falls_back_to_api():
+    fetch = FakeFetch({
+        "https://gist.githubusercontent.com/kim/abc123/raw": "# README\nBara text",
+        "https://api.github.com/gists/abc123": json.dumps({"files": {
+            "README.md": {"filename": "README.md", "content": "text"},
+            "bp.yaml": {"filename": "bp.yaml", "content": SCRIPT_YAML}}}),
+    })
+    assert bi.fetch_blueprint_yaml("https://gist.github.com/kim/abc123", fetch) == SCRIPT_YAML
+
+
+@pytest.mark.parametrize("dirty,clean", [
+    ("[YOUR_RAW_URL_HERE](https://gist.githubusercontent.com/a/b/raw/c/x.yaml)",
+     "https://gist.githubusercontent.com/a/b/raw/c/x.yaml"),
+    ("https://gist.githubusercontent.com/a/b/raw/c/x.yamlhttps://gist.githubusercontent.com/a/b/raw/c/x.yaml",
+     "https://gist.githubusercontent.com/a/b/raw/c/x.yaml"),
+    ("  https://github.com/a/b/blob/main/x.yaml ", "https://github.com/a/b/blob/main/x.yaml"),
+    ("https://gist.github.com/a/f6e5)", "https://gist.github.com/a/f6e5"),
+    ("https://gist.githubusercontent.com/a/b/raw/c/Key Fob (4 Buttons)",
+     "https://gist.githubusercontent.com/a/b/raw/c/Key Fob (4 Buttons)"),
+])
+def test_clean_url(dirty, clean):
+    assert bi.clean_url(dirty) == clean

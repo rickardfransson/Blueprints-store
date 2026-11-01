@@ -45,8 +45,6 @@ jobs:
             -o previous.json || echo "Ingen tidigare katalog, bygger från början."
 
       - name: Bygg katalogen
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # högre gräns mot GitHubs API (gists)
         run: |
           python indexer/build_index.py \
             --previous previous.json \

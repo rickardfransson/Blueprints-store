@@ -23,7 +23,6 @@ import hashlib
 import html
 import json
 import logging
-import os
 import re
 import sys
 import time
@@ -52,28 +51,16 @@ Fetcher = Callable[[str], str]
 # --------------------------------------------------------------------------
 
 class HttpFetcher:
-    """Hämtar URL:er, väntar mellan anrop och respekterar 429/Retry-After.
+    """Hämtar URL:er, väntar mellan anrop och respekterar 429/Retry-After
+    samt GitHubs API-gräns (60 anrop i timmen utan inloggning)."""
 
-    Om miljövariabeln GITHUB_TOKEN finns skickas den till GitHubs API
-    (och bara dit). Utan token tillåter GitHub bara 60 API-anrop i timmen,
-    vilket inte räcker för alla blueprints som ligger i gists.
-    """
-
-    def __init__(self, delay: float = 1.0, retries: int = 4, timeout: float = 20.0,
-                 github_token: str | None = None):
+    def __init__(self, delay: float = 1.0, retries: int = 4, timeout: float = 20.0):
         self.session = requests.Session()
         self.session.headers["User-Agent"] = USER_AGENT
         self.delay = delay
         self.retries = retries
         self.timeout = timeout
-        self.github_token = github_token
         self._last = 0.0
-
-    def headers_for(self, url: str) -> dict[str, str]:
-        if self.github_token and urlparse(url).hostname == "api.github.com":
-            return {"Authorization": f"Bearer {self.github_token}",
-                    "Accept": "application/vnd.github+json"}
-        return {}
 
     def __call__(self, url: str) -> str:
         for attempt in range(self.retries + 1):
@@ -81,7 +68,7 @@ class HttpFetcher:
             if wait > 0:
                 time.sleep(wait)
             self._last = time.monotonic()
-            resp = self.session.get(url, timeout=self.timeout, headers=self.headers_for(url))
+            resp = self.session.get(url, timeout=self.timeout)
             if (resp.status_code in (403, 429) and resp.headers.get("X-RateLimit-Remaining") == "0"
                     and attempt < self.retries):
                 reset = float(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
@@ -145,14 +132,35 @@ def extract_import_urls(cooked_html: str) -> list[str]:
     for match in IMPORT_RE.findall(cooked_html):
         query = urlparse(html.unescape(match)).query
         for value in parse_qs(query).get("blueprint_url", []):
-            url = unquote(value).strip()
+            url = clean_url(unquote(value))
             if url and url not in found:
                 found.append(url)
     return found
 
 
+def clean_url(url: str) -> str:
+    """Reda ut vanliga slarvfel i import-länkar.
+
+    - Markdown-länk inklistrad: "[text](https://...)" -> "https://..."
+    - Samma länk inklistrad två gånger i rad: "https://a...https://a..." -> första
+    """
+    url = url.strip()
+    md = re.search(r"\]\((https?://[^)\s]+)\)?", url)
+    if md:
+        url = md.group(1)
+    second = url.find("https://", 8)
+    if second > 0:
+        url = url[:second]
+    url = url.strip().rstrip("]>")
+    # Ta bara bort en avslutande ")" som saknar "(" – den kan höra till filnamnet.
+    while url.endswith(")") and url.count(")") > url.count("("):
+        url = url[:-1]
+    return url
+
+
 GITHUB_BLOB_RE = re.compile(r"^https://github\.com/([^/]+)/([^/]+)/blob/(.+)$")
-GIST_RE = re.compile(r"^https://gist\.github\.com/(?:[^/]+/)?([0-9a-f]+)")
+GIST_RE = re.compile(r"^https://gist\.github\.com/(?:([^/]+)/)?([0-9a-f]+)")
+BLUEPRINT_START_RE = re.compile(r"^\s*blueprint\s*:", re.MULTILINE)
 FORUM_TOPIC_RE = re.compile(r"^https://community\.home-assistant\.io/t/(?:[^/]+/)?(\d+)")
 
 
@@ -183,7 +191,7 @@ def yaml_from_forum_html(cooked_html: str) -> str | None:
     """Plocka första kodblock i ett foruminlägg som ser ut som en blueprint."""
     for block in CODE_BLOCK_RE.findall(cooked_html):
         text = html.unescape(re.sub(r"<[^>]+>", "", block))
-        if re.search(r"^\s*blueprint\s*:", text, re.MULTILINE):
+        if BLUEPRINT_START_RE.search(text):
             return text
     return None
 
@@ -193,7 +201,18 @@ def fetch_blueprint_yaml(url: str, fetch: Fetcher) -> str:
     if kind == "github":
         return fetch(github_raw_url(url))
     if kind == "gist":
-        gist_id = GIST_RE.match(url).group(1)  # type: ignore[union-attr]
+        # Hämta gistens första fil som vanlig text. Det kräver inget API-anrop,
+        # så GitHubs API-gräns (och token-krångel) slipper vi för de flesta gists.
+        user, gist_id = GIST_RE.match(url).groups()  # type: ignore[union-attr]
+        raw = (f"https://gist.githubusercontent.com/{user}/{gist_id}/raw" if user
+               else f"https://gist.github.com/{gist_id}/raw")
+        try:
+            text = fetch(raw)
+            if BLUEPRINT_START_RE.search(text):
+                return text
+        except Exception:  # noqa: BLE001 - provar API:t nedan
+            pass
+        # Gisten har flera filer och blueprinten var inte den första: fråga API:t.
         data = json.loads(fetch(f"https://api.github.com/gists/{gist_id}"))
         for f in data.get("files", {}).values():
             if f.get("filename", "").endswith((".yaml", ".yml")):
@@ -406,8 +425,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.previous and Path(args.previous).exists():
         previous = json.loads(Path(args.previous).read_text("utf-8"))
 
-    fetcher = HttpFetcher(delay=args.delay, github_token=os.environ.get("GITHUB_TOKEN") or None)
-    res = build_index(fetcher, args.max_pages, previous)
+    res = build_index(HttpFetcher(delay=args.delay), args.max_pages, previous)
     res.blueprints.sort(key=lambda b: (-(b["topic"]["likes"] or 0), b["name"].lower()))
 
     index = {
