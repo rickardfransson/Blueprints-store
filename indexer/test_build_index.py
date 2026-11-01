@@ -201,3 +201,13 @@ def test_rejects_non_blueprint():
         bi.describe_blueprint("automation:\n  - alias: x\n")
     with pytest.raises(ValueError):
         bi.describe_blueprint("blueprint:\n  name: x\n  domain: lights\n")
+
+
+def test_token_only_sent_to_github_api():
+    f = bi.HttpFetcher(github_token="secret")
+    assert f.headers_for("https://api.github.com/gists/abc")["Authorization"] == "Bearer secret"
+    for url in ("https://raw.githubusercontent.com/a/b/main/x.yaml",
+                "https://community.home-assistant.io/t/1.json",
+                "https://api.github.com.evil.example/x"):
+        assert f.headers_for(url) == {}
+    assert bi.HttpFetcher().headers_for("https://api.github.com/gists/abc") == {}
