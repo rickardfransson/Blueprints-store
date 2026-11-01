@@ -7,7 +7,7 @@ on:
     inputs:
       max_pages:
         description: "Antal trådlistsidor att läsa (ca 30 trådar/sida)"
-        default: "5"
+        default: "500"
   push:
     branches: [main]
     paths: ["indexer/**", ".github/workflows/build-index.yml"]
@@ -48,7 +48,7 @@ jobs:
         run: |
           python indexer/build_index.py \
             --previous previous.json \
-            --max-pages "${{ github.event.inputs.max_pages || '5' }}" \
+            --max-pages "${{ github.event.inputs.max_pages || '500' }}" \
             --out site/index.json
 
       - name: Sammanfattning
