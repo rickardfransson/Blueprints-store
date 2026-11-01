@@ -39,7 +39,16 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class StoreError(HomeAssistantError):
-    """Fel som visas för användaren i butikssidan."""
+    """Fel som visas för användaren i butikssidan.
+
+    `code` översätts av sidan (se ERRORS i blueprint-store-panel.js),
+    `detail` är den tekniska förklaringen och visas på engelska.
+    """
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        super().__init__(f"{code}: {detail}" if detail else code)
+        self.code = code
+        self.detail = detail
 
 
 class IndexCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -60,13 +69,13 @@ class IndexCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 resp.raise_for_status()
                 data = await resp.json(content_type=None)
         except Exception as err:  # noqa: BLE001
-            raise UpdateFailed(f"Kunde inte hämta katalogen från {self.url}: {err}") from err
+            raise UpdateFailed(f"Could not download the catalog from {self.url}: {err}") from err
 
         if not isinstance(data, dict) or not isinstance(data.get("blueprints"), list):
-            raise UpdateFailed("Katalogen har fel format")
+            raise UpdateFailed("The catalog has an unexpected format")
         if data.get("schema_version") != SUPPORTED_SCHEMA_VERSION:
             raise UpdateFailed(
-                f"Katalogversion {data.get('schema_version')} stöds inte, uppdatera integrationen"
+                f"Catalog version {data.get('schema_version')} is not supported, please update the integration"
             )
         data["by_url"] = {bp["source_url"]: bp for bp in data["blueprints"] if bp.get("source_url")}
         return data
@@ -129,7 +138,7 @@ class BlueprintStore:
     def entry_for(self, source_url: str) -> dict[str, Any]:
         bp = self.index["by_url"].get(source_url)
         if bp is None:
-            raise StoreError("Blueprinten finns inte i katalogen")
+            raise StoreError("not_in_catalog")
         return bp
 
     def update_available(self, source_url: str) -> bool:
@@ -185,9 +194,9 @@ class BlueprintStore:
         try:
             return await importer.fetch_blueprint_from_url(self.hass, source_url)
         except HomeAssistantError as err:
-            raise StoreError(f"Kunde inte hämta blueprinten: {err}") from err
+            raise StoreError("fetch_failed", str(err)) from err
         except Exception as err:  # noqa: BLE001
-            raise StoreError(f"Blueprinten gick inte att läsa: {err}") from err
+            raise StoreError("invalid_blueprint", str(err)) from err
 
     async def _save(
         self, domain: str, filename: str, blueprint: models.Blueprint, overwrite: bool
@@ -200,7 +209,7 @@ class BlueprintStore:
                 await core.async_add_blueprint(blueprint, filename, allow_override=overwrite)
                 return
             except FileAlreadyExists as err:
-                raise StoreError("Det finns redan en blueprint med det filnamnet") from err
+                raise StoreError("file_exists") from err
             except TypeError:
                 _LOGGER.debug("Äldre Home Assistant, använder reservväg för att spara")
 
@@ -208,7 +217,7 @@ class BlueprintStore:
 
         def _write() -> None:
             if target.exists() and not overwrite:
-                raise StoreError("Det finns redan en blueprint med det filnamnet")
+                raise StoreError("file_exists")
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(blueprint.yaml(), encoding="utf-8")
 

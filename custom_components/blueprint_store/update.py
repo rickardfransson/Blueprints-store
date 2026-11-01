@@ -82,7 +82,7 @@ class BlueprintUpdate(CoordinatorEntity[IndexCoordinator], UpdateEntity):
 
     @property
     def release_summary(self) -> str | None:
-        return "Blueprinten har ändrats i forumtråden. Öppna länken för att läsa vad som är nytt."
+        return "The blueprint has changed. Open the forum thread to see what is new."
 
     async def async_install(self, version: str | None, backup: bool, **kwargs: Any) -> None:
         try:

@@ -116,4 +116,4 @@ async def test_install_rejects_urls_outside_catalog(hass, aioclient_mock, hass_w
     await ws.send_json({"id": 1, "type": f"{DOMAIN}/install",
                         "source_url": "https://evil.example/bp.yaml"})
     res = await ws.receive_json()
-    assert not res["success"] and res["error"]["code"] == "install_failed"
+    assert not res["success"] and res["error"]["code"] == "not_in_catalog"

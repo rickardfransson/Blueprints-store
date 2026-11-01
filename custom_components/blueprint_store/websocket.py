@@ -28,7 +28,7 @@ def async_register(hass: HomeAssistant) -> None:
 async def ws_list(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
     store = _store(hass)
     if store is None:
-        connection.send_error(msg["id"], "not_loaded", "Blueprint Store är inte igång")
+        connection.send_error(msg["id"], "not_loaded", "Blueprint Store is not loaded")
         return
     installed = await store.async_installed()
     index = store.index
@@ -59,12 +59,12 @@ async def ws_list(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
 async def ws_preview(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
     store = _store(hass)
     if store is None:
-        connection.send_error(msg["id"], "not_loaded", "Blueprint Store är inte igång")
+        connection.send_error(msg["id"], "not_loaded", "Blueprint Store is not loaded")
         return
     try:
         connection.send_result(msg["id"], await store.async_preview(msg["source_url"]))
     except StoreError as err:
-        connection.send_error(msg["id"], "preview_failed", str(err))
+        connection.send_error(msg["id"], err.code, err.detail)
 
 
 @websocket_api.websocket_command(
@@ -79,12 +79,12 @@ async def ws_preview(hass: HomeAssistant, connection: websocket_api.ActiveConnec
 async def ws_install(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
     store = _store(hass)
     if store is None:
-        connection.send_error(msg["id"], "not_loaded", "Blueprint Store är inte igång")
+        connection.send_error(msg["id"], "not_loaded", "Blueprint Store is not loaded")
         return
     try:
         result = await store.async_install(msg["source_url"], overwrite=msg["overwrite"])
     except StoreError as err:
-        connection.send_error(msg["id"], "install_failed", str(err))
+        connection.send_error(msg["id"], err.code, err.detail)
         return
     connection.send_result(msg["id"], result)
 
@@ -95,7 +95,7 @@ async def ws_install(hass: HomeAssistant, connection: websocket_api.ActiveConnec
 async def ws_refresh(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
     store = _store(hass)
     if store is None:
-        connection.send_error(msg["id"], "not_loaded", "Blueprint Store är inte igång")
+        connection.send_error(msg["id"], "not_loaded", "Blueprint Store is not loaded")
         return
     await store.coordinator.async_refresh()
     connection.send_result(msg["id"], {"ok": store.coordinator.last_update_success})
