@@ -176,14 +176,44 @@ function relativeDate(iso, lang) {
   return rtf.format(-Math.floor(days / 365), "year");
 }
 
-function firstParagraph(text, max = 180) {
-  const plain = String(text || "")
+// Bara bokstäver och siffror, gemener – för att jämföra text med blueprintens namn.
+function normalize(text) {
+  return String(text || "").toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+const VERSION_RE = /(^|\s|[-–(\[])v(ersion)?\s*[:.]?\s*\d+(\.\d+)*[a-z]?\b[)\]]?/gi;
+
+// Kort beskrivning för korten. Hoppar över rader som bara upprepar namnet
+// och/eller ett versionsnummer (t.ex. "📱 Appliance Notifications Version: 4.0").
+function cardSummary(bp, max = 180) {
+  const plain = String(bp.description || "")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")      // markdown images
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")   // markdown links -> text
-    .replace(/[#*_`>]/g, "")
-    .trim();
-  const para = plain.split(/\n\s*\n/)[0].replace(/\s+/g, " ");
-  return para.length > max ? para.slice(0, max - 1) + "…" : para;
+    .replace(/<[^>]+>/g, " ")                  // html-taggar
+    .replace(/[#*_`>|]/g, "");
+  const name = normalize(bp.name);
+  const title = normalize(bp.topic?.title);
+  const useful = plain.split(/\n/).map((l) => l.trim()).filter((line) => {
+    const n = normalize(line.replace(VERSION_RE, " "));
+    if (!n) return false;                                    // tom, bara emoji/version
+    // Rubriken i forumet är ofta samma mening som beskrivningen, så den
+    // jämförs bara exakt. Namnet får också matcha delvis ("Frigate Notifications").
+    return n !== title && n !== name && !(n.length >= 4 && name.includes(n));
+  });
+  // Första stycket bland det som är kvar (rader i följd hör ihop).
+  const para = [];
+  for (const line of plain.split(/\n/).map((l) => l.trim())) {
+    if (useful.includes(line)) para.push(line);
+    else if (para.length && !line) break;
+  }
+  let text = para.join(" ").replace(/\s+/g, " ").trim();
+  if (!text) {
+    // Inget kvar efter sållningen: visa hellre första raden än ett tomt kort,
+    // men inte om den bara är namnet igen.
+    const first = plain.split(/\n/).map((l) => l.trim()).find(Boolean) || "";
+    text = normalize(first) === name ? "" : first.replace(/\s+/g, " ");
+  }
+  return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
 }
 
 function pickLanguage(hass) {
@@ -409,7 +439,7 @@ class BlueprintStorePanel extends HTMLElement {
         this._badge(bp),
       ),
       h("div", { class: "card-title" }, bp.name || bp.topic?.title || t.untitled),
-      h("div", { class: "card-desc" }, firstParagraph(bp.description)),
+      h("div", { class: "card-desc" }, cardSummary(bp)),
       h("div", { class: "card-meta" },
         h("span", {}, `♥ ${bp.topic?.likes ?? 0}`),
         h("span", {}, bp.author || bp.topic?.poster || ""),
@@ -571,14 +601,18 @@ const STYLES = `
   .icon-btn { font: inherit; font-size: 20px; background: none; border: none; color: inherit; cursor: pointer; padding: 8px;
               border-radius: 50%; line-height: 1; }
   .dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); padding: 0; border: none;
-            border-radius: 16px; background: var(--card-background-color); color: var(--primary-text-color); }
+            border-radius: 16px; background: var(--card-background-color); color: var(--primary-text-color);
+            overflow: hidden; }
+  /* Rubrik och knappar står still, bara mitten scrollar. */
+  .dialog[open] { display: flex; flex-direction: column; }
   .dialog::backdrop { background: rgba(0,0,0,.5); }
-  .dlg-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 20px 0; }
+  .dlg-head { flex: none; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+              padding: 20px 20px 12px; border-bottom: 1px solid var(--divider-color); }
   .dlg-head h2 { margin: 8px 0 4px; font-size: 22px; font-weight: 500; }
   .sub { color: var(--secondary-text-color); font-size: 14px; }
-  .dlg-body { padding: 8px 20px; }
+  .dlg-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 20px 16px; }
   .dlg-body h3 { font-size: 15px; margin: 18px 0 6px; }
-  .desc { white-space: pre-line; line-height: 1.5; max-height: 260px; overflow: auto; }
+  .desc { white-space: pre-line; line-height: 1.5; overflow-wrap: anywhere; }
   .req, .inputs { margin: 0; padding-left: 20px; line-height: 1.7; }
   .req li.ok::marker { content: "✓  "; color: var(--success-color, #43a047); }
   .req li.bad::marker { content: "✗  "; color: var(--error-color, #db4437); }
@@ -591,7 +625,8 @@ const STYLES = `
   .result .btn { margin-right: 8px; }
   .success { color: var(--success-color, #43a047); }
   .error { color: var(--error-color, #db4437); }
-  .dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 20px 20px; }
+  .dlg-actions { flex: none; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+                 padding: 12px 20px 16px; border-top: 1px solid var(--divider-color); }
   :host([narrow]) .content { padding: 12px; }
 `;
 
