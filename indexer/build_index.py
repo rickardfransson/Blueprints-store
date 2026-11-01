@@ -23,6 +23,7 @@ import hashlib
 import html
 import json
 import logging
+import os
 import re
 import sys
 import time
@@ -38,7 +39,7 @@ import yaml
 FORUM = "https://community.home-assistant.io"
 CATEGORY_PATH = "/c/blueprints-exchange/53"
 SCHEMA_VERSION = 1
-USER_AGENT = "ha-blueprint-store-indexer/0.1 (+https://github.com/OWNER/ha-blueprint-store)"
+USER_AGENT = "ha-blueprint-store-indexer/0.1 (+https://github.com/rickardfransson/Blueprints-store)"
 
 log = logging.getLogger("indexer")
 
@@ -51,15 +52,28 @@ Fetcher = Callable[[str], str]
 # --------------------------------------------------------------------------
 
 class HttpFetcher:
-    """Hämtar URL:er, väntar mellan anrop och respekterar 429/Retry-After."""
+    """Hämtar URL:er, väntar mellan anrop och respekterar 429/Retry-After.
 
-    def __init__(self, delay: float = 1.0, retries: int = 4, timeout: float = 20.0):
+    Om miljövariabeln GITHUB_TOKEN finns skickas den till GitHubs API
+    (och bara dit). Utan token tillåter GitHub bara 60 API-anrop i timmen,
+    vilket inte räcker för alla blueprints som ligger i gists.
+    """
+
+    def __init__(self, delay: float = 1.0, retries: int = 4, timeout: float = 20.0,
+                 github_token: str | None = None):
         self.session = requests.Session()
         self.session.headers["User-Agent"] = USER_AGENT
         self.delay = delay
         self.retries = retries
         self.timeout = timeout
+        self.github_token = github_token
         self._last = 0.0
+
+    def headers_for(self, url: str) -> dict[str, str]:
+        if self.github_token and urlparse(url).hostname == "api.github.com":
+            return {"Authorization": f"Bearer {self.github_token}",
+                    "Accept": "application/vnd.github+json"}
+        return {}
 
     def __call__(self, url: str) -> str:
         for attempt in range(self.retries + 1):
@@ -67,7 +81,14 @@ class HttpFetcher:
             if wait > 0:
                 time.sleep(wait)
             self._last = time.monotonic()
-            resp = self.session.get(url, timeout=self.timeout)
+            resp = self.session.get(url, timeout=self.timeout, headers=self.headers_for(url))
+            if (resp.status_code in (403, 429) and resp.headers.get("X-RateLimit-Remaining") == "0"
+                    and attempt < self.retries):
+                reset = float(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
+                pause = min(max(reset - time.time(), 1) + 2, 3700)
+                log.warning("GitHubs gräns nådd, väntar %.0fs", pause)
+                time.sleep(pause)
+                continue
             if resp.status_code == 429 and attempt < self.retries:
                 pause = float(resp.headers.get("Retry-After", 10 * (attempt + 1)))
                 log.warning("429 från %s, väntar %.0fs", url, pause)
@@ -373,7 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default="index.json")
     ap.add_argument("--previous", help="förra index.json, för att slippa hämta oförändrade trådar")
-    ap.add_argument("--max-pages", type=int, default=5, help="antal trådlistsidor (ca 30 trådar/sida)")
+    ap.add_argument("--max-pages", type=int, default=500, help="antal trådlistsidor (ca 30 trådar/sida)")
     ap.add_argument("--delay", type=float, default=1.0, help="sekunder mellan anrop")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
@@ -385,7 +406,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.previous and Path(args.previous).exists():
         previous = json.loads(Path(args.previous).read_text("utf-8"))
 
-    res = build_index(HttpFetcher(delay=args.delay), args.max_pages, previous)
+    fetcher = HttpFetcher(delay=args.delay, github_token=os.environ.get("GITHUB_TOKEN") or None)
+    res = build_index(fetcher, args.max_pages, previous)
     res.blueprints.sort(key=lambda b: (-(b["topic"]["likes"] or 0), b["name"].lower()))
 
     index = {
