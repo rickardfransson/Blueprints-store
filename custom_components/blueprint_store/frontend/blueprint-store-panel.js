@@ -49,7 +49,10 @@ const TRANSLATIONS = {
     openThread: "Open forum thread",
     showCode: "Show code",
     install: "Install",
-    reinstall: "Reinstall",
+    statusLatest: "Installed. You have the latest version.",
+    statusUpdate: "A newer version is available.",
+    statusUntracked: "Installed, but not through the store, so the store can't tell when a newer version comes out.",
+    reinstallViaStore: "Reinstall through the store",
     update: "Update",
     installing: "Installing…",
     done: "Done ✓",
@@ -110,7 +113,10 @@ const TRANSLATIONS = {
     openThread: "Öppna forumtråden",
     showCode: "Visa koden",
     install: "Installera",
-    reinstall: "Installera om",
+    statusLatest: "Installerad. Du har den senaste versionen.",
+    statusUpdate: "Det finns en nyare version.",
+    statusUntracked: "Installerad, men inte via butiken. Därför kan butiken inte se när det kommer en nyare version.",
+    reinstallViaStore: "Installera om via butiken",
     update: "Uppdatera",
     installing: "Installerar…",
     done: "Klar ✓",
@@ -394,7 +400,7 @@ class BlueprintStorePanel extends HTMLElement {
         (this._grid = h("div", { class: "grid" })),
         (this._more = h("div", { class: "more" })),
       ),
-      (this._dialog = h("dialog", { class: "dialog", onclose: () => (this._dialog.textContent = "") })),
+      (this._dialog = h("dialog", { class: "dialog" })),  // töms när den öppnas, se _openDetails
     );
     this._built = true;
     setTimeout(() => search.focus(), 50);
@@ -480,11 +486,32 @@ class BlueprintStorePanel extends HTMLElement {
     const reqList = [...(bp.requires_integrations || []), ...(bp.requires_domains || [])];
     const comps = new Set(this._hass.config.components || []);
 
-    const installLabel = bp.update_available ? t.update : bp.installed ? t.reinstall : t.install;
-    const installBtn = h("button", {
-      class: "btn primary",
-      onclick: () => this._install(bp, installBtn, result),
-    }, installLabel);
+    // Den blå knappen visar alltid nästa vettiga steg. En blueprint som redan
+    // är installerad och aktuell behöver inte installeras igen, så då leder
+    // knappen vidare till blueprint-listan i stället.
+    const upToDate = bp.installed && !bp.update_available;
+    const primary = upToDate
+      ? h("button", { class: "btn primary", onclick: () => this._navigate("/config/blueprint/dashboard") }, t.goToBlueprints)
+      : h("button", {
+        class: "btn primary",
+        onclick: () => this._install(bp, primary, result),
+      }, bp.update_available ? t.update : t.install);
+
+    let status = null;
+    if (bp.update_available) {
+      status = h("div", { class: "status-box update" }, t.statusUpdate);
+    } else if (bp.installed && bp.tracked) {
+      status = h("div", { class: "status-box ok" }, "✓ ", t.statusLatest);
+    } else if (bp.installed) {
+      const relink = h("button", {
+        class: "link-btn",
+        onclick: () => this._install(bp, relink, result),
+      }, t.reinstallViaStore);
+      status = h("div", { class: "status-box ok" }, "✓ ", t.statusUntracked, " ", relink);
+    }
+    if (status && bp.installed_path) {
+      status.append(h("div", { class: "muted small" }, t.installedAs(bp.installed_path)));
+    }
 
     d.append(
       h("div", { class: "dlg-head" },
@@ -497,6 +524,7 @@ class BlueprintStorePanel extends HTMLElement {
         h("button", { class: "icon-btn", title: t.close, "aria-label": t.close, onclick: () => d.close() }, "✕"),
       ),
       h("div", { class: "dlg-body" },
+        status,
         h("p", { class: "desc" }, bp.description || t.noDescription),
 
         h("h3", {}, t.requirements),
@@ -521,12 +549,9 @@ class BlueprintStorePanel extends HTMLElement {
           ? h("a", { class: "btn", href: bp.topic.url, target: "_blank", rel: "noopener noreferrer" }, t.openThread)
           : null,
         h("button", { class: "btn", onclick: (e) => this._preview(bp, yamlBox, e.target) }, t.showCode),
-        installBtn,
+        primary,
       ),
     );
-    if (bp.installed && bp.installed_path) {
-      result.append(h("p", { class: "muted" }, t.installedAs(bp.installed_path)));
-    }
     d.showModal();
   }
 
@@ -557,9 +582,11 @@ class BlueprintStorePanel extends HTMLElement {
         overwrite: !!bp.installed,
       });
       bp.installed = true;
+      bp.tracked = true;
       bp.update_available = false;
       bp.installed_path = `${res.domain}/${res.path}`;
       btn.textContent = t.done;
+      this._dialog.querySelector(".status-box")?.remove();
       const targets = { automation: "/config/automation/dashboard", script: "/config/script/dashboard" };
       result.append(
         h("p", { class: "success" }, t.installedOk[res.domain] || t.installedOk.automation),
@@ -647,6 +674,12 @@ const STYLES = `
             background: rgba(255,152,0,.12); }
   .yaml { background: var(--code-editor-background-color, var(--secondary-background-color)); padding: 12px; border-radius: 8px;
           overflow: auto; max-height: 320px; font-size: 12px; }
+  .status-box { margin: 12px 0 4px; padding: 10px 12px; border-radius: 8px; font-size: 14px; line-height: 1.5; }
+  .status-box.ok { background: rgba(67,160,71,.12); }
+  .status-box.update { background: rgba(3,169,244,.12); }
+  .small { font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+  .link-btn { all: unset; cursor: pointer; color: var(--primary-color); text-decoration: underline; }
+  .link-btn:disabled { opacity: .6; cursor: default; text-decoration: none; }
   .result p { margin: 10px 0; }
   .result .btn { margin-right: 8px; }
   .success { color: var(--success-color, #43a047); }
