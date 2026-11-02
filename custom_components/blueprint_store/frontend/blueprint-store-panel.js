@@ -183,19 +183,25 @@ function normalize(text) {
 
 const VERSION_RE = /(^|\s|[-–(\[])v(ersion)?\s*[:.]?\s*\d+(\.\d+)*[a-z]?\b[)\]]?/gi;
 
+// Rader som bara är en länketikett och saknar mening utan själva länken.
+const LINK_LABELS = new Set(["link", "links", "githublink", "github", "gist", "source", "sourcecode",
+  "code", "download", "import", "importblueprint", "blueprint", "changelog"]);
+
 // Kort beskrivning för korten. Hoppar över rader som bara upprepar namnet
 // och/eller ett versionsnummer (t.ex. "📱 Appliance Notifications Version: 4.0").
 function cardSummary(bp, max = 180) {
   const plain = String(bp.description || "")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")      // markdown images
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")   // markdown links -> text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")   // markdown-länkar -> bara texten (tom text -> inget)
     .replace(/<[^>]+>/g, " ")                  // html-taggar
-    .replace(/[#*_`>|]/g, "");
+    .replace(/https?:\/\/\S+/g, "")            // långa webbadresser säger inget på ett kort
+    .replace(/[#*`|]/g, "")                    // markdown-tecken (men inte _ som i blueprint_import)
+    .replace(/^\s*>\s?/gm, "");                // citat
   const name = normalize(bp.name);
   const title = normalize(bp.topic?.title);
   const useful = plain.split(/\n/).map((l) => l.trim()).filter((line) => {
     const n = normalize(line.replace(VERSION_RE, " "));
-    if (!n) return false;                                    // tom, bara emoji/version
+    if (!n || LINK_LABELS.has(n)) return false;              // tom, bara emoji/version/länketikett
     // Rubriken i forumet är ofta samma mening som beskrivningen, så den
     // jämförs bara exakt. Namnet får också matcha delvis ("Frigate Notifications").
     return n !== title && n !== name && !(n.length >= 4 && name.includes(n));
@@ -211,7 +217,8 @@ function cardSummary(bp, max = 180) {
     // Inget kvar efter sållningen: visa hellre första raden än ett tomt kort,
     // men inte om den bara är namnet igen.
     const first = plain.split(/\n/).map((l) => l.trim()).find(Boolean) || "";
-    text = normalize(first) === name ? "" : first.replace(/\s+/g, " ");
+    const n = normalize(first);
+    text = n === name || LINK_LABELS.has(n) ? "" : first.replace(/\s+/g, " ");
   }
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
 }
@@ -413,11 +420,25 @@ class BlueprintStorePanel extends HTMLElement {
       this._grid.append(h("p", { class: "empty" }, this._filters.fits ? t.noResultsFits : t.noResults));
       return;
     }
+    this._list = list;
     for (const bp of list.slice(0, this._shown)) this._grid.append(this._card(bp));
-    if (list.length > this._shown) {
-      this._more.append(h("button", {
-        class: "btn", onclick: () => { this._shown += PAGE_SIZE; this._renderList(); },
-      }, t.showMore(list.length - this._shown)));
+    this._renderMore();
+  }
+
+  // "Visa fler" lägger bara till nya kort under de som redan finns. Att bygga
+  // om hela listan gjorde att sidan blev kort för ett ögonblick och hoppade upp.
+  _showMore() {
+    const from = this._shown;
+    this._shown += PAGE_SIZE;
+    for (const bp of this._list.slice(from, this._shown)) this._grid.append(this._card(bp));
+    this._renderMore();
+  }
+
+  _renderMore() {
+    this._more.textContent = "";
+    const left = this._list.length - this._shown;
+    if (left > 0) {
+      this._more.append(h("button", { class: "btn", onclick: () => this._showMore() }, this.t.showMore(left)));
     }
   }
 
@@ -577,15 +598,20 @@ const STYLES = `
   .search { width: 100%; box-sizing: border-box; font-size: 16px; }
   .check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .status { color: var(--secondary-text-color); margin: 8px 2px 12px; font-size: 14px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 12px; }
   .card { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 8px; padding: 14px;
+          min-width: 0; overflow: hidden;
           background: var(--card-background-color); border-radius: var(--ha-card-border-radius, 12px);
           border: 1px solid var(--divider-color); box-shadow: var(--ha-card-box-shadow, none); min-height: 160px; }
   .card:hover, .card:focus-visible { border-color: var(--primary-color); }
   .card-top { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  .card-title { font-size: 16px; font-weight: 500; line-height: 1.3; }
-  .card-desc { color: var(--secondary-text-color); font-size: 14px; line-height: 1.4; flex: 1; }
-  .card-meta { display: flex; gap: 12px; font-size: 12px; color: var(--secondary-text-color); }
+  /* Långa ord och adresser bryts i stället för att gå utanför kortet. */
+  .card-title { font-size: 16px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere;
+                display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .card-desc { color: var(--secondary-text-color); font-size: 14px; line-height: 1.4; flex: 1; overflow-wrap: anywhere;
+               display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
+  .card-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--secondary-text-color); }
+  .card-meta span { overflow-wrap: anywhere; }
   .chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--secondary-background-color);
           color: var(--secondary-text-color); }
   .badge { font-size: 12px; padding: 2px 8px; border-radius: 10px; }

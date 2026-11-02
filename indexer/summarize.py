@@ -27,6 +27,8 @@ def main(path: str) -> None:
     print(f"| Blueprints i katalogen | {s['blueprints']} |")
     print(f"| Trådar utan import-knapp | {s['topics_without_import_link']} |")
     print(f"| Fel | {s['errors']} |")
+    if "duplicates_removed" in s:
+        print(f"| Dubbletter borttagna | {s['duplicates_removed']} |")
 
     print("\n### Per typ\n")
     for k, v in collections.Counter(b["domain"] for b in bps).most_common():

@@ -339,6 +339,7 @@ class Result:
     errors: list[dict] = field(default_factory=list)
     topics_seen: int = 0
     topics_without_import: int = 0
+    duplicates: int = 0
 
 
 def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None) -> Result:
@@ -406,7 +407,92 @@ def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None) ->
                     "poster": first.get("username"),
                 },
             })
+    before = len(res.blueprints)
+    res.blueprints = dedupe(res.blueprints)
+    res.duplicates = before - len(res.blueprints)
     return res
+
+
+# --------------------------------------------------------------------------
+# Dubbletter
+# --------------------------------------------------------------------------
+
+GIT_REF_RE = re.compile(
+    r"^https://(?:github\.com/[^/]+/[^/]+/blob|raw\.githubusercontent\.com/[^/]+/[^/]+)/([^/]+)/"
+)
+BRANCH_NAMES = {"main", "master", "dev", "develop", "latest", "stable", "release"}
+
+
+def version_rank(url: str) -> tuple:
+    """Hur "ny" en länk ser ut: en gren (main) > högsta versionsnummer > övrigt.
+
+    Används när samma blueprint är länkad i flera versioner i en tråd,
+    t.ex. .../blob/v1.0/x.yaml, .../blob/v1.4/x.yaml.
+    """
+    m = GIT_REF_RE.match(url)
+    if not m:
+        return (1, ())
+    ref = m.group(1).lower()
+    if ref in BRANCH_NAMES:
+        return (2, ())
+    if re.fullmatch(r"v?\d+(\.\d+)*([-.]?[a-z0-9]+)?", ref):
+        return (1, tuple(int(x) for x in re.findall(r"\d+", ref)))
+    return (0, ())  # t.ex. en commit-hash
+
+
+def _name_key(name: str) -> str:
+    return re.sub(r"\W+", "", (name or "").lower())
+
+
+GIT_FILE_RE = re.compile(
+    r"^https://(?:github\.com/([^/]+)/([^/]+)/blob|raw\.githubusercontent\.com/([^/]+)/([^/]+))/[^/]+/(.+)$"
+)
+
+
+def _file_key(url: str) -> tuple | None:
+    """Samma fil i samma repo, oavsett version: github.com/u/r/blob/v1.0/x.yaml
+    och github.com/u/r/blob/main/x.yaml ger samma nyckel."""
+    m = GIT_FILE_RE.match(url)
+    if not m:
+        return None
+    user, repo = (m.group(1) or m.group(3)).lower(), (m.group(2) or m.group(4)).lower()
+    return (user, repo, m.group(5))
+
+
+def dedupe(blueprints: list[dict]) -> list[dict]:
+    """Ta bort dubbletter men behåll ordningen.
+
+    1. Samma tråd, samma typ och samma namn = olika versioner av samma
+       blueprint. Behåll den nyaste.
+    2. Samma tråd och samma fil i samma repo, men olika versioner (namnet
+       kan ha ändrats mellan versionerna). Behåll den nyaste.
+    3. Exakt samma innehåll i flera trådar. Behåll den mest gillade.
+    """
+    def pick(groups: dict, better) -> set[int]:
+        keep = set()
+        for idxs in groups.values():
+            keep.add(max(idxs, key=lambda i: (better(blueprints[i]), -i)))
+        return keep
+
+    by_version: dict[tuple, list[int]] = {}
+    for i, bp in enumerate(blueprints):
+        key = (bp["topic"]["id"], bp.get("domain"), _name_key(bp.get("name", ""))) if bp.get("name") else (i,)
+        by_version.setdefault(key, []).append(i)
+    keep = pick(by_version, lambda bp: version_rank(bp["source_url"]))
+
+    by_file: dict[tuple, list[int]] = {}
+    for i in sorted(keep):
+        fk = _file_key(blueprints[i]["source_url"])
+        key = (blueprints[i]["topic"]["id"], *fk) if fk else (i,)
+        by_file.setdefault(key, []).append(i)
+    keep = pick(by_file, lambda bp: version_rank(bp["source_url"]))
+
+    by_content: dict[str, list[int]] = {}
+    for i in sorted(keep):
+        by_content.setdefault(blueprints[i].get("sha256") or str(i), []).append(i)
+    keep = pick(by_content, lambda bp: bp["topic"].get("likes") or 0)
+
+    return [bp for i, bp in enumerate(blueprints) if i in keep]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -435,6 +521,7 @@ def main(argv: list[str] | None = None) -> int:
             "topics_seen": res.topics_seen,
             "blueprints": len(res.blueprints),
             "topics_without_import_link": res.topics_without_import,
+            "duplicates_removed": res.duplicates,
             "errors": len(res.errors),
         },
         "blueprints": res.blueprints,
