@@ -239,3 +239,47 @@ def test_gist_with_several_files_falls_back_to_api():
 ])
 def test_clean_url(dirty, clean):
     assert bi.clean_url(dirty) == clean
+
+
+def _bp(url, name="X", topic=1, sha=None, likes=0, domain="script"):
+    return {"source_url": url, "name": name, "domain": domain, "sha256": sha or url,
+            "topic": {"id": topic, "likes": likes}}
+
+
+def test_dedupe_keeps_newest_version_in_same_thread():
+    base = "https://github.com/s/t/blob/{}/n.yaml"
+    bps = [_bp(base.format(v), name="Notify") for v in ("v1.0", "v1.4", "v1.3.2", "v1.10")]
+    assert [b["source_url"] for b in bi.dedupe(bps)] == [base.format("v1.10")]
+
+
+def test_dedupe_prefers_branch_over_tags():
+    bps = [_bp("https://github.com/s/t/blob/v2.0/n.yaml"), _bp("https://github.com/s/t/blob/main/n.yaml")]
+    assert bi.dedupe(bps)[0]["source_url"].endswith("/main/n.yaml")
+
+
+def test_dedupe_keeps_different_blueprints_in_same_thread():
+    bps = [_bp("https://github.com/s/t/blob/main/a.yaml", name="A"),
+           _bp("https://github.com/s/t/blob/main/b.yaml", name="B"),
+           _bp("https://github.com/s/t/blob/main/c.yaml", name="A", domain="automation")]
+    assert len(bi.dedupe(bps)) == 3
+
+
+def test_dedupe_same_content_in_two_threads_keeps_most_liked():
+    bps = [_bp("https://a/x.yaml", name="H", topic=1, sha="same", likes=2),
+           _bp("https://b/x.yaml", name="H", topic=2, sha="same", likes=9)]
+    assert [b["source_url"] for b in bi.dedupe(bps)] == ["https://b/x.yaml"]
+
+
+def test_dedupe_same_file_renamed_between_versions():
+    base = "https://github.com/s/t/blob/{}/n.yaml"
+    bps = [_bp(base.format("v1.4"), name="Notification with Confirm"),
+           _bp(base.format("v2.0"), name="Notifications (Version 2)"),
+           _bp(base.format("main"), name="Notifications (Version 2.0.2 Beta)"),
+           _bp("https://github.com/s/t/blob/main/other.yaml", name="Other")]
+    assert [b["name"] for b in bi.dedupe(bps)] == ["Notifications (Version 2.0.2 Beta)", "Other"]
+
+
+def test_dedupe_same_file_in_different_threads_is_kept():
+    url = "https://github.com/s/t/blob/{}/n.yaml"
+    bps = [_bp(url.format("v1.0"), name="A", topic=1), _bp(url.format("v2.0"), name="B", topic=2)]
+    assert len(bi.dedupe(bps)) == 2
