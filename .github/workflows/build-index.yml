@@ -1,8 +1,12 @@
 name: Bygg blueprint-katalog
 
 on:
+  # GitHub hoppar ibland över schemalagda körningar, särskilt på nya repon.
+  # Därför körs den två gånger per dygn. Den andra körningen går snabbt,
+  # eftersom bara trådar som har ändrats sedan förra gången hämtas.
   schedule:
-    - cron: "23 2 * * *"     # varje natt 03:23 svensk tid
+    - cron: "23 2 * * *"     # 03:23 svensk tid
+    - cron: "41 13 * * *"    # 14:41 svensk tid (reserv)
   workflow_dispatch:          # gör att du kan starta den manuellt i GitHub
     inputs:
       max_pages:
