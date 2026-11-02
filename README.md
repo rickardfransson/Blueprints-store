@@ -1,3 +1,5 @@
+<img src="custom_components/blueprint_store/brand/icon.png" alt="" width="96" align="right">
+
 # Blueprint Store for Home Assistant
 
 [![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rickardfransson&repository=Blueprints-store&category=integration)
