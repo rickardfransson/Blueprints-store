@@ -13,7 +13,11 @@ Thousands of blueprints are shared on the [Blueprints Exchange](https://communit
 - **Search the whole Blueprints Exchange** by name, description, tag, author or integration (try `motion light` or `zha`).
 - **See only what fits your system.** Blueprints that need a newer version of Home Assistant, or an integration you don't have, are hidden by default.
 - **Read the code before you install.** Every blueprint can be previewed, and the forum thread is one click away.
+- **See what a blueprint can control.** Blueprints that lock doors, arm the alarm, change the heating, open covers, run commands, restart Home Assistant, send web requests or can be started from a webhook get a warning badge, so you know before you install.
 - **Get notified about updates.** When the author changes a blueprint you installed through the store, it shows up under **Settings → Updates**, next to your other updates.
+- **Know what an update changes.** Before you update, the store shows which automations and scripts use the blueprint, which settings are new or removed, and every changed line. New required settings are highlighted, because they are what breaks existing automations.
+- **Remove blueprints you no longer need.** A blueprint can be removed from the store page once nothing uses it.
+- **Favorites and what's new.** Star the blueprints you want to try later, and see what has been added or changed since your last visit.
 - **Nothing happens on its own.** Blueprints are only installed or updated when you click the button.
 - **English and Swedish.** The store page follows the language set in your Home Assistant profile. Other languages fall back to English. Translations are welcome: copy the `en` block at the top of `frontend/blueprint-store-panel.js` and send a pull request.
 
@@ -41,11 +45,51 @@ You need [HACS](https://hacs.xyz) and Home Assistant 2025.1 or newer.
 
 Installing a blueprint does not change anything in your home. It only becomes active once you create an automation or script from it.
 
+### Warning badges
+
+Some blueprints control things where a mistake matters. The catalog checks what each blueprint does and marks it with a badge on the card. The details explain what each badge means.
+
+| Badge | The blueprint… |
+|---|---|
+| Controls locks | locks or unlocks locks |
+| Controls the alarm | arms or disarms an alarm panel |
+| Controls heating | changes climate devices or water heaters |
+| Controls doors and blinds | opens or closes covers, such as garage doors |
+| Runs commands | uses `shell_command`, `python_script`, `pyscript` or `command_line` |
+| Restarts Home Assistant or add-ons | restarts or stops Home Assistant, or uses the Supervisor (`hassio`) |
+| Sends web requests | uses `rest_command` |
+| Can be triggered from outside | starts from a webhook |
+
+The badges are a guide, not a guarantee. They come from reading the blueprint's code, and a blueprint that builds its actions from templates can do things the check doesn't see. Read the code before using a blueprint for anything important.
+
+### Favorites and what's new
+
+Click the star on a card to save a blueprint as a favorite, and tick **Only favorites** to see just those.
+
+Blueprints added to the catalog since your last visit are marked **New**, and blueprints whose code has changed are marked **Changed**. Tick **Only new since my last visit** to see just those. The option only appears when there is something new.
+
+Favorites and the time of your last visit are saved with your Home Assistant user, so they follow you between your computer and your phone.
+
 ### Updates
 
 When a blueprint you installed through the store changes, an update entity appears under **Settings → Updates**. You can install it there or from the store page.
 
-Updating a blueprint reloads every automation that uses it. If the author made bigger changes, such as adding a required setting, you may need to open those automations and adjust them. Check the forum thread before updating anything important.
+Updating a blueprint reloads every automation that uses it. If the author made bigger changes, such as adding a required setting, you may need to open those automations and adjust them.
+
+Open the blueprint in the store before updating, and it shows you:
+
+- **which automations and scripts use it**, with links to each one
+- **new required settings** (highlighted in red). Automations that use the blueprint stop working until you open them and fill these in.
+- new optional settings and settings that were removed
+- **Show every change**: the full list of changed lines
+
+Check the forum thread too before updating anything important.
+
+### Removing a blueprint
+
+Open an installed blueprint and click **Remove**, then click again to confirm. The file is deleted and its update notice disappears.
+
+A blueprint can't be removed while an automation or script still uses it. The store lists them so you can change or delete them first.
 
 Blueprints you installed some other way are shown as installed, but you won't get update notices for them until you reinstall them through the store.
 
@@ -61,7 +105,7 @@ Taking a backup before trying any new integration is always a good idea.
 
 ## How it works
 
-A script runs every night on GitHub. It reads the Blueprints Exchange, finds each thread's **Import blueprint** link, downloads the blueprint and records its name, description, requirements and a fingerprint of its contents. The result is published as a single file:
+A script runs every night on GitHub. It reads the Blueprints Exchange, finds each thread's **Import blueprint** link, downloads the blueprint and records its name, description, requirements, which sensitive actions it uses, when it was added to the catalog, when its code last changed, and a fingerprint of its contents. The result is published as a single file:
 
 https://rickardfransson.github.io/Blueprints-store/index.json
 
@@ -75,7 +119,7 @@ Under **Settings → Devices & services → Blueprint Store → Configure** you 
 
 ## Removing it
 
-Delete the integration under **Settings → Devices & services**, then remove it in HACS. Blueprints you already installed stay where they are and keep working.
+Delete the integration under **Settings → Devices & services**, then remove it in HACS. Blueprints you already installed stay where they are and keep working. To remove individual blueprints, use **Remove** in the store first (see [Removing a blueprint](#removing-a-blueprint)).
 
 ## Troubleshooting
 

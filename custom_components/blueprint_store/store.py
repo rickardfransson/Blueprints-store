@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import difflib
 import logging
 from pathlib import Path
 from typing import Any
 
 from homeassistant.components.blueprint import importer, models
 from homeassistant.components.blueprint.const import BLUEPRINT_FOLDER
-from homeassistant.components.blueprint.errors import FileAlreadyExists
+from homeassistant.components.blueprint.errors import BlueprintInUse, FileAlreadyExists
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -108,6 +109,93 @@ def _scan_blueprint_folder(root: Path) -> list[Installed]:
     return found
 
 
+# Längsta diff som skickas till sidan. Större ändringar visas avkortade.
+MAX_DIFF_LINES = 600
+
+
+def used_by(hass: HomeAssistant, domain: str, path: str) -> list[str]:
+    """Entiteterna (automationer, skript, mallar) som använder en blueprint.
+
+    `path` är relativt blueprints/<domain>/, precis som i Home Assistant.
+    Funktionerna finns i respektive integration; saknas integrationen eller
+    funktionen (äldre versioner) räknas blueprinten som oanvänd.
+    """
+    try:
+        if domain == "automation":
+            from homeassistant.components.automation import automations_with_blueprint
+
+            return sorted(automations_with_blueprint(hass, path))
+        if domain == "script":
+            from homeassistant.components.script import scripts_with_blueprint
+
+            return sorted(scripts_with_blueprint(hass, path))
+        if domain == "template":
+            from homeassistant.components.template.helpers import templates_with_blueprint
+
+            return sorted(templates_with_blueprint(hass, path))
+    except (ImportError, KeyError, AttributeError):
+        pass
+    except Exception:  # noqa: BLE001 - användningen är bara information
+        _LOGGER.debug("Kunde inte se vad som använder %s/%s", domain, path, exc_info=True)
+    return []
+
+
+def _flat_inputs(inputs: Any) -> dict[str, dict[str, Any]]:
+    """Platta ut inputs, även de som ligger i sektioner."""
+    flat: dict[str, dict[str, Any]] = {}
+    for key, spec in (inputs or {}).items() if isinstance(inputs, dict) else []:
+        if isinstance(spec, dict) and isinstance(spec.get("input"), dict):
+            flat.update(_flat_inputs(spec["input"]))
+        else:
+            flat[str(key)] = spec if isinstance(spec, dict) else {}
+    return flat
+
+
+def _inputs_of(text: str) -> dict[str, dict[str, Any]]:
+    try:
+        data = yaml_util.parse_yaml(text)
+    except Exception:  # noqa: BLE001
+        return {}
+    meta = data.get("blueprint") if isinstance(data, dict) else None
+    return _flat_inputs(meta.get("input")) if isinstance(meta, dict) else {}
+
+
+def compare_blueprints(old_text: str, new_text: str) -> dict[str, Any]:
+    """Vad skiljer den installerade versionen från den nya?
+
+    Det viktiga är nya obligatoriska inställningar: de saknas i automationer
+    som redan använder blueprinten, och då slutar de fungera.
+    """
+    old, new = _inputs_of(old_text), _inputs_of(new_text)
+
+    def item(key: str, spec: dict[str, Any]) -> dict[str, str]:
+        return {"key": key, "name": str(spec.get("name") or key)}
+
+    added_required, added_optional, now_required = [], [], []
+    for key, spec in new.items():
+        required = "default" not in spec
+        if key not in old:
+            (added_required if required else added_optional).append(item(key, spec))
+        elif required and "default" in old[key]:
+            now_required.append(item(key, spec))
+    removed = [item(key, spec) for key, spec in old.items() if key not in new]
+
+    diff = list(difflib.unified_diff(
+        old_text.splitlines(), new_text.splitlines(),
+        fromfile="installed", tofile="new", n=2, lineterm="",
+    ))
+    truncated = len(diff) > MAX_DIFF_LINES
+    return {
+        "added_required": added_required,
+        "now_required": now_required,
+        "added_optional": added_optional,
+        "removed": removed,
+        "diff": "\n".join(diff[:MAX_DIFF_LINES]),
+        "diff_truncated": truncated,
+        "identical": not diff,
+    }
+
+
 class BlueprintStore:
     """Allt integrationen vet, samlat på ett ställe."""
 
@@ -162,6 +250,47 @@ class BlueprintStore:
             "suggested_filename": imported.suggested_filename,
             "domain": imported.blueprint.domain,
         }
+
+    async def async_diff(self, source_url: str) -> dict[str, Any]:
+        """Jämför den installerade blueprinten med versionen i katalogen."""
+        self.entry_for(source_url)
+        inst = (await self.async_installed()).get(source_url)
+        if inst is None:
+            raise StoreError("not_installed")
+        path = Path(self.hass.config.path(BLUEPRINT_FOLDER, inst.domain, inst.path))
+        old_text = await self.hass.async_add_executor_job(path.read_text, "utf-8")
+        imported = await self._fetch(source_url)
+        blueprint = imported.blueprint
+        blueprint.update_metadata(source_url=source_url)
+        # Samma formatering som när filen sparas, så att bara riktiga ändringar syns.
+        result = compare_blueprints(old_text, blueprint.yaml())
+        result["used_by"] = used_by(self.hass, inst.domain, inst.path)
+        return result
+
+    async def async_remove(self, source_url: str) -> dict[str, Any]:
+        """Ta bort en installerad blueprint, men bara om inget använder den."""
+        inst = (await self.async_installed()).get(source_url)
+        if inst is None:
+            raise StoreError("not_installed")
+        if users := used_by(self.hass, inst.domain, inst.path):
+            raise StoreError("in_use", ", ".join(users))
+
+        domain_blueprints = self.hass.data.get("blueprint", {})
+        core = domain_blueprints.get(inst.domain) if isinstance(domain_blueprints, dict) else None
+        if core is not None and hasattr(core, "async_remove_blueprint"):
+            try:
+                await core.async_remove_blueprint(inst.path)
+            except BlueprintInUse as err:
+                raise StoreError("in_use", str(err)) from err
+        else:
+            target = Path(self.hass.config.path(BLUEPRINT_FOLDER, inst.domain, inst.path))
+            await self.hass.async_add_executor_job(target.unlink)
+
+        if self.tracked.pop(source_url, None) is not None:
+            await self._storage.async_save({"tracked": self.tracked})
+            for cb in list(self._on_tracked_change):
+                cb()
+        return {"domain": inst.domain, "path": inst.path}
 
     async def async_install(self, source_url: str, overwrite: bool = False) -> dict[str, Any]:
         bp_entry = self.entry_for(source_url)

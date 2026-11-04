@@ -283,3 +283,96 @@ def test_dedupe_same_file_in_different_threads_is_kept():
     url = "https://github.com/s/t/blob/{}/n.yaml"
     bps = [_bp(url.format("v1.0"), name="A", topic=1), _bp(url.format("v2.0"), name="B", topic=2)]
     assert len(bi.dedupe(bps)) == 2
+
+
+# --------------------------------------------------------------------------
+# Känsliga tjänster
+# --------------------------------------------------------------------------
+
+LOCK_YAML = """blueprint:
+  name: Lock at night
+  domain: automation
+  input:
+    door:
+      name: Dörr
+      selector:
+        entity:
+          domain: lock
+triggers:
+  - trigger: webhook
+    webhook_id: !input hook
+actions:
+  - choose:
+      - conditions: []
+        sequence:
+          - action: lock.lock
+            target: !input door
+          - service: shell_command.backup
+  - action: homeassistant.restart
+  - action: light.turn_on
+"""
+
+
+def test_sensitive_categories_are_found():
+    bp = bi.describe_blueprint(LOCK_YAML)
+    assert bp["sensitive"] == ["locks", "commands", "system", "webhook"]
+
+
+def test_sensitive_from_input_domain_only():
+    text = LOCK_YAML.split("triggers:")[0] + "triggers: []\nactions: []\n"
+    assert bi.describe_blueprint(text)["sensitive"] == ["locks"]
+
+
+def test_harmless_blueprint_has_no_sensitive(result):
+    assert by_name(result)["Motion light (ZHA)"]["sensitive"] == []
+    # homeassistant.turn_on är inte "system", bara restart/stop
+    text = "blueprint:\n  name: x\n  domain: script\nsequence:\n  - action: homeassistant.turn_on\n"
+    assert bi.describe_blueprint(text)["sensitive"] == []
+
+
+def test_old_cache_without_sensitive_is_read_again(result):
+    old = [{k: v for k, v in bp.items() if k != "sensitive"} for bp in result.blueprints]
+    fetch = FakeFetch(RESPONSES)
+    again = bi.build_index(fetch, max_pages=5, previous={"blueprints": old})
+    assert f"{F}/t/1001.json" in fetch.calls
+    assert all("sensitive" in bp for bp in again.blueprints)
+
+
+# --------------------------------------------------------------------------
+# Datum för "Nytt sedan sist"
+# --------------------------------------------------------------------------
+
+def test_first_run_uses_topic_date(result):
+    # Första körningen ska inte göra allt "nytt".
+    for bp in result.blueprints:
+        assert bp["added_at"] == "2026-01-01T00:00:00Z"
+        assert bp["changed_at"] is None
+
+
+def test_dates_carry_over_and_change_is_stamped(result):
+    previous = {"blueprints": json.loads(json.dumps(result.blueprints))}
+    responses = dict(RESPONSES)
+    responses[f"{CAT}?page=0"] = listing([t(1001, bumped="2026-11-02")], more=False)
+    responses["https://raw.githubusercontent.com/alice/blueprints/main/automation/motion.yaml"] = (
+        MOTION_YAML + "  - delay: 1\n")
+    again = bi.build_index(FakeFetch(responses), max_pages=5, previous=previous, now="2026-11-03T00:00:00+00:00")
+    [bp] = again.blueprints
+    assert bp["added_at"] == "2026-01-01T00:00:00Z"
+    assert bp["changed_at"] == "2026-11-03T00:00:00+00:00"
+
+
+def test_unchanged_content_keeps_changed_at(result):
+    previous = {"blueprints": json.loads(json.dumps(result.blueprints))}
+    for bp in previous["blueprints"]:
+        bp["changed_at"] = "2026-05-05T00:00:00+00:00"
+    responses = dict(RESPONSES)
+    responses[f"{CAT}?page=0"] = listing([t(1001, bumped="2026-11-02")], more=False)
+    again = bi.build_index(FakeFetch(responses), max_pages=5, previous=previous, now="2026-11-03T00:00:00+00:00")
+    assert again.blueprints[0]["changed_at"] == "2026-05-05T00:00:00+00:00"
+
+
+def test_new_blueprint_gets_today(result):
+    previous = {"blueprints": [bp for bp in result.blueprints if bp["source_url"] != GIST]}
+    again = bi.build_index(FakeFetch(RESPONSES), max_pages=5, previous=previous, now="2026-11-03T00:00:00+00:00")
+    gist = by_name(again)["Notify everyone"]
+    assert gist["added_at"] == "2026-11-03T00:00:00+00:00" and gist["changed_at"] is None

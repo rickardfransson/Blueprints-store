@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import patch
 
+
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from homeassistant import config_entries
@@ -117,3 +118,115 @@ async def test_install_rejects_urls_outside_catalog(hass, aioclient_mock, hass_w
                         "source_url": "https://evil.example/bp.yaml"})
     res = await ws.receive_json()
     assert not res["success"] and res["error"]["code"] == "not_in_catalog"
+
+
+async def _install(ws, msg_id: int) -> dict:
+    await ws.send_json({"id": msg_id, "type": f"{DOMAIN}/install", "source_url": MOTION_URL})
+    res = await ws.receive_json()
+    assert res["success"], res
+    return res["result"]
+
+
+NEW_MOTION_YAML = MOTION_YAML.replace(
+    "triggers:",
+    """    delay:
+      name: Fördröjning
+      selector:
+        number: {min: 0, max: 600}
+    brightness:
+      name: Ljusstyrka
+      default: 100
+      selector:
+        number: {min: 0, max: 100}
+triggers:""",
+)
+
+
+async def test_diff_shows_new_required_settings(hass, aioclient_mock, hass_ws_client, base_components) -> None:
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.get(MOTION_RAW, text=MOTION_YAML)
+    ws = await hass_ws_client(hass)
+    await _install(ws, 1)
+
+    # Samma version: inga skillnader
+    await ws.send_json({"id": 2, "type": f"{DOMAIN}/diff", "source_url": MOTION_URL})
+    res = await ws.receive_json()
+    assert res["success"], res
+    assert res["result"]["identical"] is True
+
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(DEFAULT_INDEX_URL, json=make_index(sha="b" * 64))
+    aioclient_mock.get(MOTION_RAW, text=NEW_MOTION_YAML)
+    await ws.send_json({"id": 3, "type": f"{DOMAIN}/diff", "source_url": MOTION_URL})
+    res = await ws.receive_json()
+    assert res["success"], res
+    diff = res["result"]
+    assert [i["key"] for i in diff["added_required"]] == ["delay"]
+    assert [i["key"] for i in diff["added_optional"]] == ["brightness"]
+    assert diff["removed"] == [] and diff["identical"] is False
+    assert "+    delay:" in diff["diff"]
+    assert diff["used_by"] == []
+
+
+async def test_diff_needs_installed_blueprint(hass, aioclient_mock, hass_ws_client, base_components) -> None:
+    await _setup(hass, aioclient_mock)
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": f"{DOMAIN}/diff", "source_url": MOTION_URL})
+    res = await ws.receive_json()
+    assert not res["success"] and res["error"]["code"] == "not_installed"
+
+
+async def test_remove_blueprint_and_its_update_entity(hass, aioclient_mock, hass_ws_client, base_components) -> None:
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.get(MOTION_RAW, text=MOTION_YAML)
+    ws = await hass_ws_client(hass)
+    installed = await _install(ws, 1)
+    await hass.async_block_till_done()
+    path = Path(hass.config.path("blueprints", "automation", installed["path"]))
+    assert len(hass.states.async_all("update")) == 1
+
+    await ws.send_json({"id": 2, "type": f"{DOMAIN}/remove", "source_url": MOTION_URL})
+    res = await ws.receive_json()
+    assert res["success"], res
+    await hass.async_block_till_done()
+    assert not await hass.async_add_executor_job(path.exists)
+    assert hass.states.async_all("update") == []
+
+    await ws.send_json({"id": 3, "type": f"{DOMAIN}/list"})
+    [bp] = (await ws.receive_json())["result"]["blueprints"]
+    assert bp["installed"] is False and bp["tracked"] is False
+
+    # Går att installera igen, och då kommer uppdateringsentiteten tillbaka
+    await _install(ws, 4)
+    await hass.async_block_till_done()
+    assert len(hass.states.async_all("update")) == 1
+
+
+async def test_blueprint_in_use_is_listed_and_cannot_be_removed(
+    hass, aioclient_mock, hass_ws_client, base_components, request
+) -> None:
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.get(MOTION_RAW, text=MOTION_YAML)
+    ws = await hass_ws_client(hass)
+    installed = await _install(ws, 1)
+
+    def fake_usage(hass, path):
+        return ["automation.kitchen_motion"] if path == installed["path"] else []
+
+    # Home Assistant räknar ut användningen. Här låtsas vi att en automation
+    # i köket använder blueprinten.
+    patcher = patch(
+        "homeassistant.components.automation.automations_with_blueprint", side_effect=fake_usage
+    )
+    patcher.start()
+    request.addfinalizer(patcher.stop)
+
+    await ws.send_json({"id": 2, "type": f"{DOMAIN}/list"})
+    [bp] = (await ws.receive_json())["result"]["blueprints"]
+    assert bp["used_by"] == ["automation.kitchen_motion"]
+
+    await ws.send_json({"id": 3, "type": f"{DOMAIN}/remove", "source_url": MOTION_URL})
+    res = await ws.receive_json()
+    assert not res["success"] and res["error"]["code"] == "in_use"
+    path = Path(hass.config.path("blueprints", "automation", installed["path"]))
+    assert await hass.async_add_executor_job(path.exists)

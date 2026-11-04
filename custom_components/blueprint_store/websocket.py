@@ -10,7 +10,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
-from .store import BlueprintStore, StoreError
+from .store import BlueprintStore, StoreError, used_by
 
 
 def _store(hass: HomeAssistant) -> BlueprintStore | None:
@@ -19,7 +19,7 @@ def _store(hass: HomeAssistant) -> BlueprintStore | None:
 
 @callback
 def async_register(hass: HomeAssistant) -> None:
-    for handler in (ws_list, ws_preview, ws_install, ws_refresh):
+    for handler in (ws_list, ws_preview, ws_diff, ws_install, ws_remove, ws_refresh):
         websocket_api.async_register_command(hass, handler)
 
 
@@ -42,6 +42,7 @@ async def ws_list(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
             "installed_path": f"{inst.domain}/{inst.path}" if inst else None,
             "tracked": url in store.tracked,
             "update_available": inst is not None and store.update_available(url),
+            "used_by": used_by(hass, inst.domain, inst.path) if inst else [],
         })
     connection.send_result(msg["id"], {
         "generated_at": index.get("generated_at"),
@@ -65,6 +66,38 @@ async def ws_preview(hass: HomeAssistant, connection: websocket_api.ActiveConnec
         connection.send_result(msg["id"], await store.async_preview(msg["source_url"]))
     except StoreError as err:
         connection.send_error(msg["id"], err.code, err.detail)
+
+
+async def _run(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict, action) -> None:
+    """Kör en åtgärd i butiken och skicka svaret eller felkoden till sidan."""
+    store = _store(hass)
+    if store is None:
+        connection.send_error(msg["id"], "not_loaded", "Blueprint Store is not loaded")
+        return
+    try:
+        result = await action(store)
+    except StoreError as err:
+        connection.send_error(msg["id"], err.code, err.detail)
+        return
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/diff", vol.Required("source_url"): str}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_diff(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    await _run(hass, connection, msg, lambda store: store.async_diff(msg["source_url"]))
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): f"{DOMAIN}/remove", vol.Required("source_url"): str}
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_remove(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    await _run(hass, connection, msg, lambda store: store.async_remove(msg["source_url"]))
 
 
 @websocket_api.websocket_command(

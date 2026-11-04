@@ -23,6 +23,53 @@ const TRANSLATIONS = {
     sortName: "Name A–Z",
     onlyFits: "Only show what fits my system",
     onlyInstalled: "Only installed",
+    onlyFavorites: "Only favorites",
+    onlyNew: (n) => `Only new since my last visit (${n})`,
+    badgeNew: "New",
+    badgeChanged: "Changed",
+    favoriteAdd: "Save as favorite",
+    favoriteRemove: "Remove from favorites",
+    sensitive: {
+      locks: "Controls locks",
+      alarm: "Controls the alarm",
+      climate: "Controls heating",
+      covers: "Controls doors and blinds",
+      commands: "Runs commands",
+      system: "Restarts Home Assistant or add-ons",
+      web_requests: "Sends web requests",
+      webhook: "Can be triggered from outside",
+    },
+    sensitiveHeading: "Worth knowing",
+    sensitiveHelp: {
+      locks: "Locks or unlocks locks.",
+      alarm: "Arms or disarms the alarm.",
+      climate: "Changes heating, cooling or water heaters.",
+      covers: "Opens or closes covers, such as garage doors and blinds.",
+      commands: "Runs shell commands or Python scripts on the machine Home Assistant runs on.",
+      system: "Can restart or stop Home Assistant, or control add-ons and the host.",
+      web_requests: "Sends requests to other services on the network or the internet.",
+      webhook: "Starts from a webhook, so anyone who knows its address can trigger it.",
+    },
+    usedByHeading: (n) => `Used by ${n === 1 ? "1 automation or script" : `${n} automations or scripts`}`,
+    notUsed: "Not used by any automation or script yet.",
+    changesHeading: "What changes in the update",
+    checkingChanges: "Checking what has changed…",
+    changesFailed: (e) => `Could not check the changes: ${e}`,
+    changesNone: "The update changes nothing you need to adjust.",
+    changesIdentical: "The content is the same as what you have.",
+    addedRequired: "New required settings:",
+    nowRequired: "Settings that are now required:",
+    addedOptional: "New optional settings:",
+    removedInputs: "Removed settings:",
+    mustAdjust: "Everything listed above that uses the blueprint stops working until you open it and fill in the new settings.",
+    showDiff: "Show every change",
+    hideDiff: "Hide changes",
+    diffTruncated: "The list is cut short. Read the full code with Show code.",
+    remove: "Remove",
+    removeConfirm: "Click again to remove",
+    removing: "Removing…",
+    removed: "Removed. You can install it again at any time.",
+    removeBlocked: "Remove it from the automations and scripts above first.",
     loading: "Loading the catalog…",
     loadFailed: (e) => `Could not load the catalog: ${e}`,
     count: (shown, total) => `${shown} of ${total} blueprints`,
@@ -74,6 +121,8 @@ const TRANSLATIONS = {
       file_exists: "A blueprint with the same file name already exists.",
       not_loaded: "Blueprint Store is not running. Check Settings → Devices & services.",
       unauthorized: "Only administrators can install blueprints.",
+      not_installed: "The blueprint is not installed.",
+      in_use: "The blueprint is still used by an automation or script.",
     },
   },
 
@@ -87,6 +136,53 @@ const TRANSLATIONS = {
     sortName: "Namn A–Ö",
     onlyFits: "Bara sådant som passar mitt system",
     onlyInstalled: "Bara installerade",
+    onlyFavorites: "Bara favoriter",
+    onlyNew: (n) => `Bara nytt sedan mitt förra besök (${n})`,
+    badgeNew: "Ny",
+    badgeChanged: "Ändrad",
+    favoriteAdd: "Spara som favorit",
+    favoriteRemove: "Ta bort från favoriter",
+    sensitive: {
+      locks: "Styr lås",
+      alarm: "Styr larmet",
+      climate: "Styr värmen",
+      covers: "Styr portar och persienner",
+      commands: "Kör kommandon",
+      system: "Startar om Home Assistant eller tillägg",
+      web_requests: "Skickar webbanrop",
+      webhook: "Kan startas utifrån",
+    },
+    sensitiveHeading: "Bra att veta",
+    sensitiveHelp: {
+      locks: "Låser eller låser upp lås.",
+      alarm: "Larmar på eller av.",
+      climate: "Ändrar värme, kyla eller varmvattenberedare.",
+      covers: "Öppnar eller stänger t.ex. garageportar och persienner.",
+      commands: "Kör skalkommandon eller Python-skript på datorn som Home Assistant körs på.",
+      system: "Kan starta om eller stänga av Home Assistant, eller styra tillägg och värddatorn.",
+      web_requests: "Skickar anrop till andra tjänster i nätverket eller på internet.",
+      webhook: "Startas via en webhook, så den som känner till adressen kan starta den.",
+    },
+    usedByHeading: (n) => `Används av ${n === 1 ? "1 automation eller skript" : `${n} automationer eller skript`}`,
+    notUsed: "Används inte av någon automation eller något skript än.",
+    changesHeading: "Det här ändras i uppdateringen",
+    checkingChanges: "Kollar vad som har ändrats…",
+    changesFailed: (e) => `Kunde inte kolla ändringarna: ${e}`,
+    changesNone: "Uppdateringen ändrar inget som du behöver justera.",
+    changesIdentical: "Innehållet är detsamma som det du har.",
+    addedRequired: "Nya obligatoriska inställningar:",
+    nowRequired: "Inställningar som nu är obligatoriska:",
+    addedOptional: "Nya valfria inställningar:",
+    removedInputs: "Borttagna inställningar:",
+    mustAdjust: "Allt ovan som använder blueprinten slutar fungera tills du öppnar det och fyller i de nya inställningarna.",
+    showDiff: "Visa alla ändringar",
+    hideDiff: "Dölj ändringarna",
+    diffTruncated: "Listan är avkortad. Läs hela koden med Visa koden.",
+    remove: "Ta bort",
+    removeConfirm: "Klicka igen för att ta bort",
+    removing: "Tar bort…",
+    removed: "Borttagen. Du kan installera den igen när du vill.",
+    removeBlocked: "Ta först bort den från automationerna och skripten ovan.",
     loading: "Hämtar katalogen…",
     loadFailed: (e) => `Kunde inte läsa katalogen: ${e}`,
     count: (shown, total) => `${shown} av ${total} blueprints`,
@@ -138,6 +234,8 @@ const TRANSLATIONS = {
       file_exists: "Det finns redan en blueprint med samma filnamn.",
       not_loaded: "Blueprint Store är inte igång. Kontrollera Inställningar → Enheter och tjänster.",
       unauthorized: "Bara administratörer kan installera blueprints.",
+      not_installed: "Blueprinten är inte installerad.",
+      in_use: "Blueprinten används fortfarande av en automation eller ett skript.",
     },
   },
 };
@@ -229,6 +327,37 @@ function cardSummary(bp, max = 180) {
   return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
 }
 
+// Favoriter och senaste besök sparas per användare i Home Assistant, så att
+// de följer med mellan datorer och telefoner. Om det inte går (äldre
+// versioner) sparas de i webbläsaren i stället.
+const USER_DATA_KEY = "blueprint_store";
+
+async function loadUserData(hass) {
+  try {
+    const res = await hass.callWS({ type: "frontend/get_user_data", key: USER_DATA_KEY });
+    if (res?.value && typeof res.value === "object") return res.value;
+    if (res && "value" in res) return {};
+  } catch (_err) { /* faller tillbaka på webbläsaren */ }
+  try {
+    return JSON.parse(localStorage.getItem(USER_DATA_KEY) || "{}") || {};
+  } catch (_err) {
+    return {};
+  }
+}
+
+async function saveUserData(hass, value) {
+  try { localStorage.setItem(USER_DATA_KEY, JSON.stringify(value)); } catch (_err) { /* ingen lagring */ }
+  try {
+    await hass.callWS({ type: "frontend/set_user_data", key: USER_DATA_KEY, value });
+  } catch (_err) { /* webbläsaren räcker */ }
+}
+
+function after(iso, since) {
+  if (!iso || !since) return false;
+  const a = Date.parse(iso), b = Date.parse(since);
+  return !Number.isNaN(a) && !Number.isNaN(b) && a > b;
+}
+
 function pickLanguage(hass) {
   const lang = String(hass?.locale?.language || hass?.language || "en").toLowerCase();
   const base = lang.split(/[-_]/)[0];
@@ -244,7 +373,9 @@ class BlueprintStorePanel extends HTMLElement {
     this._loading = true;
     this._error = null;
     this._shown = PAGE_SIZE;
-    this._filters = { q: "", domain: "", fits: true, installed: false, sort: "popular" };
+    this._filters = { q: "", domain: "", fits: true, installed: false, favorites: false, fresh: false, sort: "popular" };
+    this._favorites = new Set();
+    this._lastVisit = null;  // förra besöket, avgör vad som är "nytt"
     this._built = false;
     this._lang = "en";
     this.t = TRANSLATIONS.en;
@@ -291,6 +422,7 @@ class BlueprintStorePanel extends HTMLElement {
     this._renderList();
     try {
       if (refresh) await this._hass.callWS({ type: "blueprint_store/refresh" });
+      if (!this._userData) await this._loadUserData();
       const res = await this._hass.callWS({ type: "blueprint_store/list" });
       this._items = res.blueprints || [];
       this._meta = res;
@@ -300,6 +432,27 @@ class BlueprintStorePanel extends HTMLElement {
     this._loading = false;
     this._renderList();
   }
+
+  async _loadUserData() {
+    this._userData = await loadUserData(this._hass);
+    this._favorites = new Set(Array.isArray(this._userData.favorites) ? this._userData.favorites : []);
+    // Det som kommit in sedan förra besöket räknas som nytt under hela det
+    // här besöket, även om sidan laddas om under tiden.
+    this._lastVisit = this._userData.last_visit || null;
+    this._userData.last_visit = new Date().toISOString();
+    saveUserData(this._hass, this._userData);
+  }
+
+  _toggleFavorite(bp) {
+    if (this._favorites.has(bp.source_url)) this._favorites.delete(bp.source_url);
+    else this._favorites.add(bp.source_url);
+    this._userData = { ...(this._userData || {}), favorites: [...this._favorites] };
+    saveUserData(this._hass, this._userData);
+  }
+
+  _isNew(bp) { return after(bp.added_at, this._lastVisit); }
+
+  _isChanged(bp) { return !this._isNew(bp) && after(bp.changed_at, this._lastVisit); }
 
   _compat(bp) {
     const comps = new Set(this._hass.config.components || []);
@@ -315,6 +468,8 @@ class BlueprintStorePanel extends HTMLElement {
     const list = this._items.filter((bp) => {
       if (f.domain && bp.domain !== f.domain) return false;
       if (f.installed && !bp.installed) return false;
+      if (f.favorites && !this._favorites.has(bp.source_url)) return false;
+      if (f.fresh && !this._isNew(bp) && !this._isChanged(bp)) return false;
       if (f.fits && !bp.installed && !this._compat(bp).ok) return false;
       if (!words.length) return true;
       const hay = [
@@ -394,6 +549,12 @@ class BlueprintStorePanel extends HTMLElement {
             h("label", { class: "check" },
               h("input", { type: "checkbox", checked: f.installed, onchange: set("installed") }),
               t.onlyInstalled),
+            h("label", { class: "check" },
+              h("input", { type: "checkbox", checked: f.favorites, onchange: set("favorites") }),
+              t.onlyFavorites),
+            (this._freshLabel = h("label", { class: "check", hidden: true },
+              h("input", { type: "checkbox", checked: f.fresh, onchange: set("fresh") }),
+              h("span"))),
           ),
         ),
         (this._status = h("div", { class: "status" })),
@@ -419,6 +580,9 @@ class BlueprintStorePanel extends HTMLElement {
       this._status.textContent = t.loadFailed(this._error);
       return;
     }
+    const fresh = this._items.filter((bp) => this._isNew(bp) || this._isChanged(bp)).length;
+    this._freshLabel.hidden = !fresh && !this._filters.fresh;
+    this._freshLabel.querySelector("span").textContent = this.t.onlyNew(fresh);
     const list = this._filtered();
     const updated = this._meta.generated_at ? t.catalogUpdated(this._date(this._meta.generated_at)) : "";
     this._status.textContent = t.count(list.length, this._items.length) + updated;
@@ -458,21 +622,68 @@ class BlueprintStorePanel extends HTMLElement {
     return null;
   }
 
+  _freshBadge(bp) {
+    if (this._isNew(bp)) return h("span", { class: "badge new" }, this.t.badgeNew);
+    if (this._isChanged(bp)) return h("span", { class: "badge new" }, this.t.badgeChanged);
+    return null;
+  }
+
+  _sensitiveBadges(bp) {
+    const labels = this.t.sensitive;
+    return (bp.sensitive || []).filter((c) => labels[c])
+      .map((c) => h("span", { class: "badge sensitive", title: this.t.sensitiveHelp[c] }, "⚠ ", labels[c]));
+  }
+
+  _favButton(bp, onchange) {
+    const t = this.t;
+    const btn = h("button", { class: "fav" });
+    const paint = () => {
+      const on = this._favorites.has(bp.source_url);
+      btn.textContent = on ? "★" : "☆";
+      btn.classList.toggle("on", on);
+      btn.title = on ? t.favoriteRemove : t.favoriteAdd;
+      btn.setAttribute("aria-label", btn.title);
+      btn.setAttribute("aria-pressed", String(on));
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();  // öppna inte detaljrutan
+      this._toggleFavorite(bp);
+      paint();
+      onchange?.();
+    });
+    btn.addEventListener("keydown", (e) => e.stopPropagation());
+    paint();
+    return btn;
+  }
+
   _card(bp) {
     const t = this.t;
-    return h("button", { class: "card", onclick: () => this._openDetails(bp) },
+    // Kortet är en div med knapproll, eftersom favoritknappen inte får ligga
+    // inuti en annan knapp.
+    const open = () => this._openDetails(bp);
+    const card = h("div", {
+      class: "card", role: "button", tabindex: "0", onclick: open,
+      onkeydown: (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      },
+    },
       h("div", { class: "card-top" },
         h("span", { class: "chip" }, t.domains[bp.domain] || bp.domain),
+        this._freshBadge(bp),
         this._badge(bp),
+        h("span", { class: "spacer" }),
+        this._favButton(bp, () => { if (this._filters.favorites) this._renderList(); }),
       ),
       h("div", { class: "card-title" }, bp.name || bp.topic?.title || t.untitled),
       h("div", { class: "card-desc" }, cardSummary(bp)),
+      bp.sensitive?.length ? h("div", { class: "card-top" }, this._sensitiveBadges(bp)) : null,
       h("div", { class: "card-meta" },
         h("span", {}, `♥ ${bp.topic?.likes ?? 0}`),
         h("span", {}, bp.author || bp.topic?.poster || ""),
         h("span", {}, this._date(bp.topic?.bumped_at)),
       ),
     );
+    return card;
   }
 
   _openDetails(bp) {
@@ -513,18 +724,51 @@ class BlueprintStorePanel extends HTMLElement {
       status.append(h("div", { class: "muted small" }, t.installedAs(bp.installed_path)));
     }
 
+    const usedBy = bp.used_by || [];
+    const usage = bp.installed ? h("div", { class: "usage" },
+      h("h3", {}, usedBy.length ? t.usedByHeading(usedBy.length) : ""),
+      usedBy.length
+        ? h("ul", { class: "used-by" }, ...usedBy.map((eid) => h("li", {}, this._entityLink(eid))))
+        : h("p", { class: "muted" }, t.notUsed),
+    ) : null;
+    if (usage && !usedBy.length) usage.querySelector("h3").remove();
+
+    const changes = bp.update_available ? h("div", { class: "changes" }) : null;
+    if (changes) this._loadChanges(bp, changes);
+
+    const sensitive = (bp.sensitive || []).filter((c) => t.sensitive[c]);
+    const sensitiveBox = sensitive.length ? h("div", { class: "sensitive-box" },
+      h("h3", {}, "⚠ ", t.sensitiveHeading),
+      h("ul", {}, ...sensitive.map((c) => h("li", {}, h("strong", {}, t.sensitive[c]), " – ", t.sensitiveHelp[c]))),
+    ) : null;
+
+    const remove = bp.installed ? h("button", {
+      class: "btn danger",
+      disabled: usedBy.length > 0,
+      title: usedBy.length ? t.removeBlocked : null,
+      onclick: () => this._remove(bp, remove, result),
+    }, t.remove) : null;
+
     d.append(
       h("div", { class: "dlg-head" },
         h("div", {},
           h("span", { class: "chip" }, t.domains[bp.domain] || bp.domain),
+          " ", this._freshBadge(bp),
           h("h2", {}, bp.name || bp.topic?.title || t.untitled),
           h("div", { class: "sub" },
             t.byLine(bp.author || bp.topic?.poster || t.unknownAuthor, bp.topic?.likes ?? 0, this._date(bp.topic?.bumped_at))),
         ),
-        h("button", { class: "icon-btn", title: t.close, "aria-label": t.close, onclick: () => d.close() }, "✕"),
+        h("div", { class: "head-btns" },
+          this._favButton(bp, () => this._renderList()),
+          h("button", { class: "icon-btn", title: t.close, "aria-label": t.close, onclick: () => d.close() }, "✕"),
+        ),
       ),
       h("div", { class: "dlg-body" },
         status,
+        changes,
+        usage,
+        bp.installed && usedBy.length ? h("p", { class: "muted small" }, t.removeBlocked) : null,
+        sensitiveBox,
         h("p", { class: "desc" }, bp.description || t.noDescription),
 
         h("h3", {}, t.requirements),
@@ -548,11 +792,111 @@ class BlueprintStorePanel extends HTMLElement {
         bp.topic?.url
           ? h("a", { class: "btn", href: bp.topic.url, target: "_blank", rel: "noopener noreferrer" }, t.openThread)
           : null,
+        remove,
         h("button", { class: "btn", onclick: (e) => this._preview(bp, yamlBox, e.target) }, t.showCode),
         primary,
       ),
     );
     d.showModal();
+  }
+
+  _entityLink(entityId) {
+    const st = this._hass.states[entityId];
+    const name = st?.attributes?.friendly_name || entityId;
+    const [domain, objectId] = entityId.split(".");
+    let path = null;
+    if (domain === "automation" && st?.attributes?.id) path = `/config/automation/edit/${st.attributes.id}`;
+    else if (domain === "script") path = `/config/script/edit/${objectId}`;
+    if (!path) return h("span", {}, name);
+    return h("a", {
+      href: path,
+      onclick: (e) => { e.preventDefault(); this._navigate(path); },
+    }, name);
+  }
+
+  // Hämtar den nya versionen och jämför med den installerade, så att man ser
+  // nya obligatoriska inställningar innan man trycker på Uppdatera.
+  async _loadChanges(bp, box) {
+    const t = this.t;
+    box.append(h("h3", {}, t.changesHeading), h("p", { class: "muted" }, t.checkingChanges));
+    let res;
+    try {
+      res = await this._hass.callWS({ type: "blueprint_store/diff", source_url: bp.source_url });
+    } catch (err) {
+      box.lastChild.textContent = t.changesFailed(this._errorText(err));
+      return;
+    }
+    box.lastChild.remove();
+    const names = (list) => list.map((i) => i.name || i.key).join(", ");
+    const groups = [
+      [res.added_required, t.addedRequired, "bad"],
+      [res.now_required, t.nowRequired, "bad"],
+      [res.added_optional, t.addedOptional, ""],
+      [res.removed, t.removedInputs, ""],
+    ].filter(([list]) => list?.length);
+
+    if (res.identical) {
+      box.append(h("p", {}, t.changesIdentical));
+      return;
+    }
+    if (!groups.length) box.append(h("p", { class: "success" }, "✓ ", t.changesNone));
+    for (const [list, label, cls] of groups) {
+      box.append(h("p", { class: cls ? `change ${cls}` : "change" }, h("strong", {}, label), " ", names(list)));
+    }
+    const breaking = (res.added_required?.length || 0) + (res.now_required?.length || 0);
+    if (breaking && (res.used_by || bp.used_by || []).length) {
+      box.append(h("div", { class: "notice warn-box" }, t.mustAdjust));
+    }
+
+    if (res.diff) {
+      const pre = h("pre", { class: "yaml diff", hidden: true },
+        ...res.diff.split("\n").map((line) => h("span", {
+          class: line.startsWith("+") && !line.startsWith("+++") ? "add"
+            : line.startsWith("-") && !line.startsWith("---") ? "del"
+              : line.startsWith("@@") ? "hunk" : "",
+        }, line || " ")));
+      const toggle = h("button", {
+        class: "link-btn",
+        onclick: () => {
+          pre.hidden = !pre.hidden;
+          toggle.textContent = pre.hidden ? t.showDiff : t.hideDiff;
+        },
+      }, t.showDiff);
+      box.append(h("p", {}, toggle), pre);
+      if (res.diff_truncated) pre.append(h("span", { class: "hunk" }, t.diffTruncated));
+    }
+  }
+
+  async _remove(bp, btn, result) {
+    const t = this.t;
+    // Två klick i stället för en ruta som frågar "Är du säker?".
+    if (!btn.dataset.armed) {
+      btn.dataset.armed = "1";
+      btn.textContent = t.removeConfirm;
+      setTimeout(() => {
+        if (btn.isConnected && btn.dataset.armed && !btn.disabled) {
+          delete btn.dataset.armed;
+          btn.textContent = t.remove;
+        }
+      }, 5000);
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = t.removing;
+    result.textContent = "";
+    try {
+      await this._hass.callWS({ type: "blueprint_store/remove", source_url: bp.source_url });
+    } catch (err) {
+      delete btn.dataset.armed;
+      btn.disabled = false;
+      btn.textContent = t.remove;
+      result.append(h("p", { class: "error" }, t.failed(this._errorText(err))));
+      return;
+    }
+    Object.assign(bp, { installed: false, tracked: false, update_available: false, installed_path: null, used_by: [] });
+    this._renderList();
+    this._openDetails(bp);
+    this._dialog.querySelector(".result")?.append(h("p", { class: "success" }, t.removed));
   }
 
   async _preview(bp, box, btn) {
@@ -630,7 +974,7 @@ const STYLES = `
           min-width: 0; overflow: hidden;
           background: var(--card-background-color); border-radius: var(--ha-card-border-radius, 12px);
           border: 1px solid var(--divider-color); box-shadow: var(--ha-card-box-shadow, none); min-height: 160px; }
-  .card:hover, .card:focus-visible { border-color: var(--primary-color); }
+  .card:hover, .card:focus-visible { border-color: var(--primary-color); outline: none; }
   .card-top { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   /* Långa ord och adresser bryts i stället för att gå utanför kortet. */
   .card-title { font-size: 16px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere;
@@ -645,12 +989,34 @@ const STYLES = `
   .badge.ok { background: rgba(67,160,71,.15); color: var(--success-color, #43a047); }
   .badge.update { background: rgba(3,169,244,.15); color: var(--info-color, #039be5); }
   .badge.warn { background: rgba(255,152,0,.15); color: var(--warning-color, #ef6c00); }
+  .badge.new { background: rgba(156,39,176,.15); color: #8e24aa; }
+  .badge.sensitive { background: rgba(219,68,55,.12); color: var(--error-color, #db4437); }
+  .spacer { flex: 1; }
+  .fav { all: unset; cursor: pointer; font-size: 20px; line-height: 1; padding: 2px 4px; border-radius: 6px;
+         color: var(--secondary-text-color); }
+  .fav.on { color: #f9a825; }
+  .fav:hover, .fav:focus-visible { background: var(--secondary-background-color); }
+  .head-btns { display: flex; align-items: center; gap: 4px; }
+  .head-btns .fav { font-size: 22px; padding: 6px; }
   .more { text-align: center; margin: 20px 0; }
   .empty { color: var(--secondary-text-color); }
   .btn { font: inherit; cursor: pointer; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--divider-color);
          background: transparent; color: var(--primary-color); text-decoration: none; display: inline-block; }
   .btn.primary { background: var(--primary-color); color: var(--text-primary-color, #fff); border-color: var(--primary-color); }
   .btn:disabled { opacity: .6; cursor: default; }
+  .btn.danger { color: var(--error-color, #db4437); }
+  .sensitive-box { margin: 12px 0; padding: 4px 12px 8px; border-radius: 8px; background: rgba(219,68,55,.08); }
+  .sensitive-box h3 { margin-top: 8px; }
+  .sensitive-box ul, .used-by { margin: 0; padding-left: 20px; line-height: 1.7; }
+  .used-by a { color: var(--primary-color); }
+  .changes { margin: 8px 0; }
+  .change { margin: 6px 0; }
+  .change.bad strong { color: var(--error-color, #db4437); }
+  .warn-box { margin-top: 8px; }
+  .diff span { display: block; white-space: pre; }
+  .diff .add { background: rgba(67,160,71,.18); }
+  .diff .del { background: rgba(219,68,55,.18); }
+  .diff .hunk { color: var(--secondary-text-color); }
   .icon-btn { font: inherit; font-size: 20px; background: none; border: none; color: inherit; cursor: pointer; padding: 8px;
               border-radius: 50%; line-height: 1; }
   .dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); padding: 0; border: none;
