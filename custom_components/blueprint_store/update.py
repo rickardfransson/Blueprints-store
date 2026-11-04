@@ -12,6 +12,7 @@ from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -23,16 +24,23 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     store: BlueprintStore = hass.data[DOMAIN]
-    added: set[str] = set()
+    added: dict[str, str] = {}  # source_url -> unique_id
 
     @callback
     def _add_new() -> None:
+        # Borttagna via butiken: ta bort uppdateringsentiteten också.
+        registry = er.async_get(hass)
+        for url in [u for u in added if u not in store.tracked]:
+            unique_id = added.pop(url)
+            if entity_id := registry.async_get_entity_id("update", DOMAIN, unique_id):
+                registry.async_remove(entity_id)
+
         new = [
             BlueprintUpdate(store, url)
             for url in store.tracked
             if url not in added and url in store.index["by_url"]
         ]
-        added.update(e.source_url for e in new)
+        added.update({e.source_url: e.unique_id for e in new})
         if new:
             async_add_entities(new)
 

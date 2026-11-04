@@ -9,7 +9,8 @@ Flöde:
   2. För varje tråd: läs första inlägget och leta efter
      my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...
   3. Hämta blueprint-YAML:en från den länken (GitHub, gist eller forumet).
-  4. Plocka ut namn, beskrivning, domän, inputs, krav och en innehålls-hash.
+  4. Plocka ut namn, beskrivning, domän, inputs, krav, känsliga tjänster
+     (lås, larm, kommandon …) och en innehålls-hash.
   5. Skriv allt till index.json.
 
 Körs normalt nattligen av GitHub Actions. Lokalt:
@@ -280,6 +281,54 @@ def requirements_from_inputs(inputs: dict) -> tuple[set[str], set[str]]:
     return integrations, domains
 
 
+# Vad en blueprint kan göra som är värt att känna till innan man installerar.
+# Nyckeln är kategorin som butiken visar som ett märke, värdet är de
+# tjänstedomäner (och i några fall hela tjänster) som räknas dit.
+SENSITIVE_ACTIONS: dict[str, set[str]] = {
+    "locks": {"lock"},
+    "alarm": {"alarm_control_panel"},
+    "climate": {"climate", "water_heater"},
+    "covers": {"cover"},
+    "commands": {"shell_command", "python_script", "pyscript", "command_line"},
+    "system": {"hassio", "homeassistant.restart", "homeassistant.stop"},
+    "web_requests": {"rest_command"},
+}
+# Entitetsdomäner i blueprintens inställningar som räcker för ett märke,
+# t.ex. "välj ett lås" även om själva tjänsten är en mall.
+SENSITIVE_INPUT_DOMAINS = {"locks": {"lock"}, "alarm": {"alarm_control_panel"},
+                           "climate": {"climate", "water_heater"}, "covers": {"cover"}}
+SENSITIVE_ORDER = [*SENSITIVE_ACTIONS, "webhook"]
+
+
+def _walk_values(node: Any):
+    """Alla (nyckel, värde)-par i ett YAML-träd, på alla nivåer."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield key, value
+            yield from _walk_values(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_values(item)
+
+
+def sensitive_categories(data: dict, input_domains: set[str]) -> list[str]:
+    """Vilka känsliga saker blueprinten styr: lås, larm, värme, kommandon …"""
+    found: set[str] = set()
+    for key, value in _walk_values({k: v for k, v in data.items() if k != "blueprint"}):
+        if key in ("action", "service") and isinstance(value, str) and "." in value:
+            service = value.strip().lower()
+            domain = service.split(".", 1)[0]
+            for cat, names in SENSITIVE_ACTIONS.items():
+                if domain in names or service in names:
+                    found.add(cat)
+        elif key in ("trigger", "platform") and value == "webhook":
+            found.add("webhook")
+    for cat, domains in SENSITIVE_INPUT_DOMAINS.items():
+        if input_domains & domains:
+            found.add(cat)
+    return [c for c in SENSITIVE_ORDER if c in found]
+
+
 def describe_blueprint(text: str) -> dict:
     data = parse_yaml(text)
     bp = data.get("blueprint")
@@ -309,6 +358,7 @@ def describe_blueprint(text: str) -> dict:
         ],
         "requires_integrations": sorted(integrations),
         "requires_domains": sorted(domains),
+        "sensitive": sensitive_categories(data, domains),
         "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
     }
 
@@ -342,7 +392,8 @@ class Result:
     duplicates: int = 0
 
 
-def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None) -> Result:
+def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None,
+                now: str | None = None) -> Result:
     """Bygg katalogen. 'previous' = förra körningens index; oförändrade
     trådar (samma bumped_at) återanvänds så vi inte belastar forumet i onödan."""
     cache: dict[int, list[dict]] = {}
@@ -359,7 +410,9 @@ def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None) ->
         topic_url = f"{FORUM}/t/{t.get('slug', 'topic')}/{topic_id}"
 
         cached = cache.get(topic_id)
-        if cached and cached[0]["topic"].get("bumped_at") == t.get("bumped_at"):
+        # Poster från en äldre katalog utan "sensitive" läses om en gång.
+        if (cached and cached[0]["topic"].get("bumped_at") == t.get("bumped_at")
+                and all("sensitive" in bp for bp in cached)):
             for bp in cached:
                 if bp["source_url"] not in seen_sources:
                     seen_sources.add(bp["source_url"])
@@ -410,7 +463,36 @@ def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None) ->
     before = len(res.blueprints)
     res.blueprints = dedupe(res.blueprints)
     res.duplicates = before - len(res.blueprints)
+    stamp_dates(res.blueprints, previous, now or datetime.now(timezone.utc).isoformat(timespec="seconds"))
     return res
+
+
+def stamp_dates(blueprints: list[dict], previous: dict | None, now: str) -> None:
+    """Sätt added_at (när blueprinten kom in i katalogen) och changed_at (när
+    innehållet senast ändrades). Butiken använder dem för "Nytt sedan sist".
+
+    Ny version av samma blueprint i samma tråd (t.ex. en ny versionslänk)
+    räknas som en ändring, inte som en ny blueprint.
+    """
+    old_by_url: dict[str, dict] = {}
+    old_by_name: dict[tuple, dict] = {}
+    for bp in (previous or {}).get("blueprints", []):
+        old_by_url[bp["source_url"]] = bp
+        old_by_name[(bp["topic"]["id"], bp.get("domain"), _name_key(bp.get("name", "")))] = bp
+
+    for bp in blueprints:
+        old = old_by_url.get(bp["source_url"]) or old_by_name.get(
+            (bp["topic"]["id"], bp.get("domain"), _name_key(bp.get("name", ""))))
+        if old is None:
+            # Allra första körningen: allt är inte "nytt", använd trådens datum.
+            bp["added_at"] = now if previous else (bp["topic"].get("created_at") or now)
+            bp["changed_at"] = None
+            continue
+        bp["added_at"] = old.get("added_at") or old["topic"].get("created_at") or now
+        if old.get("sha256") != bp.get("sha256"):
+            bp["changed_at"] = now
+        else:
+            bp["changed_at"] = old.get("changed_at")
 
 
 # --------------------------------------------------------------------------

@@ -1,6 +1,8 @@
 """Gemensamma testfixturer. Körs mot en riktig Home Assistant via
 pytest-homeassistant-custom-component."""
 
+from pathlib import Path
+import shutil
 from unittest.mock import patch
 
 import pytest
@@ -69,6 +71,16 @@ def make_index(sha: str = "a" * 64) -> dict:
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield
+
+
+@pytest.fixture(autouse=True)
+def clean_installed_blueprints(hass: HomeAssistant):
+    """Testmiljöns konfigurationsmapp delas mellan testerna, så blueprints
+    som ett test installerar tas bort före och efter varje test."""
+    folder = Path(hass.config.path("blueprints", "automation", "alice"))
+    shutil.rmtree(folder, ignore_errors=True)
+    yield
+    shutil.rmtree(folder, ignore_errors=True)
 
 
 @pytest.fixture
