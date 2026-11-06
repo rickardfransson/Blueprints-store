@@ -2,7 +2,7 @@
 
 # Blueprint Store for Home Assistant
 
-[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rickardfransson&repository=Blueprints-store&category=integration)
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rickardfransson&repository=Blueprints-store&category=integration)
 
 Browse, search and install blueprints from the Home Assistant community without leaving Home Assistant.
 
@@ -23,13 +23,23 @@ Thousands of blueprints are shared on the [Blueprints Exchange](https://communit
 
 ## Installation
 
-You need [HACS](https://hacs.xyz) and Home Assistant 2025.1 or newer.
+You need Home Assistant 2025.1 or newer.
 
-1. Click the **Open in HACS** button above, or add the repository manually:
-   in HACS, open the ⋮ menu → **Custom repositories**, paste `https://github.com/rickardfransson/Blueprints-store`, choose **Integration** and click **Add**.
+**Home Assistant 2026.11 or newer (Marketplace)**
+
+1. Click the button above, or add the repository yourself: go to **Settings → Marketplace**, select **Add from link** in the upper-right corner, enter `rickardfransson/Blueprints-store` and select **Add**. The Marketplace needs to be connected to GitHub before you can add a repository.
+2. Open **Blueprint Store** in the Marketplace and select **Install**.
+3. Restart Home Assistant.
+4. Go to **Settings → Devices & services → Add integration** and pick **Blueprint Store**.
+
+**Home Assistant 2026.10 or older ([HACS](https://hacs.xyz))**
+
+1. Click the button above, or in HACS open the ⋮ menu → **Custom repositories**, paste `https://github.com/rickardfransson/Blueprints-store`, choose **Integration** and click **Add**.
 2. Find **Blueprint Store** in HACS and click **Download**.
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration** and pick **Blueprint Store**.
+
+If you installed Blueprint Store through HACS and then update to 2026.11, it moves to the Marketplace on its own and keeps getting updates. You don't need to reinstall it.
 
 [![Open your Home Assistant instance and start setting up Blueprint Store.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=blueprint_store)
 
@@ -119,7 +129,7 @@ Under **Settings → Devices & services → Blueprint Store → Configure** you 
 
 ## Removing it
 
-Delete the integration under **Settings → Devices & services**, then remove it in HACS. Blueprints you already installed stay where they are and keep working. To remove individual blueprints, use **Remove** in the store first (see [Removing a blueprint](#removing-a-blueprint)).
+Delete the integration under **Settings → Devices & services**, then remove it in the Marketplace (or in HACS on 2026.10 and older). Blueprints you already installed stay where they are and keep working. To remove individual blueprints, use **Remove** in the store first (see [Removing a blueprint](#removing-a-blueprint)).
 
 ## Troubleshooting
 
@@ -141,7 +151,7 @@ pip install pytest-homeassistant-custom-component
 python -m pytest -v tests
 ```
 
-GitHub Actions runs both test suites on every change, along with Home Assistant's `hassfest` and the HACS validation.
+GitHub Actions runs both test suites on every change, along with Home Assistant's `hassfest` and the HACS validation (`hacs/action`), which also checks what the Marketplace needs.
 
 ## License
 
