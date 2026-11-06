@@ -22,8 +22,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # Ikonen i Home Assistants "brands"-repo läggs till senare.
-          ignore: brands
 
   tests:
     name: Tester mot riktig Home Assistant
