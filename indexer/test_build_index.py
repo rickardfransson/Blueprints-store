@@ -339,6 +339,96 @@ def test_old_cache_without_sensitive_is_read_again(result):
 
 
 # --------------------------------------------------------------------------
+# Kategorier
+# --------------------------------------------------------------------------
+
+def cats(yaml_text: str) -> list[str]:
+    return bi.describe_blueprint(yaml_text)["categories"]
+
+
+def test_categories_in_built_index(result):
+    assert by_name(result)["Motion light (ZHA)"]["categories"] == ["lighting", "presence"]
+    assert by_name(result)["Notify everyone"]["categories"] == ["notifications"]
+    assert by_name(result)["Forum & friends"]["categories"] == []
+
+
+def test_category_from_action_alone():
+    text = "blueprint:\n  name: x\n  domain: script\nsequence:\n  - action: cover.open_cover\n"
+    assert cats(text) == ["covers"]
+
+
+def test_category_from_input_domain_and_old_service_key():
+    text = """blueprint:
+  name: x
+  domain: automation
+  input:
+    t:
+      selector: {entity: {filter: [{domain: climate}]}}
+actions:
+  - service: media_player.volume_set
+"""
+    assert cats(text) == ["climate", "media"]
+
+
+def test_button_events_and_triggers():
+    text = """blueprint:
+  name: x
+  domain: automation
+triggers:
+  - platform: event
+    event_type: zha_event
+  - trigger: time
+    at: "07:00"
+  - trigger: conversation
+    command: hej
+"""
+    assert cats(text) == ["remotes", "voice_ai", "schedule"]
+
+
+def test_category_from_name_but_not_far_down_in_description():
+    text = ("blueprint:\n  name: Low battery report\n  domain: automation\n"
+            f"  description: \"{'x ' * 200} lights\"\n")
+    assert cats(text) == ["maintenance"]
+
+
+def test_plain_switch_is_not_a_remote():
+    text = "blueprint:\n  name: Toggle switch when sensor changes\n  domain: automation\n"
+    assert cats(text) == []
+
+
+def test_templated_values_are_ignored():
+    text = """blueprint:
+  name: x
+  domain: script
+sequence:
+  - action: "{{ 'light.turn_on' if x else 'notify.notify' }}"
+  - action: !input custom
+"""
+    assert cats(text) == []
+
+
+def test_forum_tags_add_categories():
+    assert bi.categories_from_tags(["automation", "Lights", "energy"]) == ["lighting", "energy"]
+    assert bi.merge_categories(["energy"], ["lighting", "energy"]) == ["lighting", "energy"]
+
+
+def test_tags_from_topic_are_merged(result):
+    responses = dict(RESPONSES)
+    responses[f"{F}/t/1005.json"] = json.dumps({
+        **json.loads(RESPONSES[f"{F}/t/1005.json"]), "tags": ["automation", "climate"]})
+    res = bi.build_index(FakeFetch(responses), max_pages=5)
+    assert by_name(res)["Notify everyone"]["categories"] == ["notifications", "climate"]
+
+
+def test_old_cache_without_categories_is_read_again(result):
+    old = [{k: v for k, v in bp.items() if k != "categories"} for bp in result.blueprints]
+    fetch = FakeFetch(RESPONSES)
+    again = bi.build_index(fetch, max_pages=5, previous={"blueprints": old})
+    assert f"{F}/t/1001.json" in fetch.calls
+    assert all("categories" in bp for bp in again.blueprints)
+
+
+# --------------------------------------------------------------------------
 # Datum för "Nytt sedan sist"
 # --------------------------------------------------------------------------
 

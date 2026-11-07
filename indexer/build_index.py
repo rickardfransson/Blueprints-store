@@ -10,7 +10,8 @@ Flöde:
      my.home-assistant.io/redirect/blueprint_import/?blueprint_url=...
   3. Hämta blueprint-YAML:en från den länken (GitHub, gist eller forumet).
   4. Plocka ut namn, beskrivning, domän, inputs, krav, känsliga tjänster
-     (lås, larm, kommandon …) och en innehålls-hash.
+     (lås, larm, kommandon …), kategorier (belysning, knappar, notiser …)
+     och en innehålls-hash.
   5. Skriv allt till index.json.
 
 Körs normalt nattligen av GitHub Actions. Lokalt:
@@ -329,6 +330,178 @@ def sensitive_categories(data: dict, input_domains: set[str]) -> list[str]:
     return [c for c in SENSITIVE_ORDER if c in found]
 
 
+# --------------------------------------------------------------------------
+# Kategorier: vilken sorts automation är det? Butiken filtrerar på dem.
+#
+# Säkrast är vad blueprinten faktiskt gör (tjänster den anropar, utlösare den
+# lyssnar på) och vad den ber om i sina inställningar. Namnet, beskrivningen
+# och forumtrådens taggar används som komplement.
+# --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class CategoryRule:
+    actions: frozenset[str] = frozenset()       # tjänstedomäner eller hela tjänster
+    triggers: frozenset[str] = frozenset()      # utlösartyper (trigger/platform)
+    events: frozenset[str] = frozenset()        # event_type för händelseutlösare
+    domains: frozenset[str] = frozenset()       # entitetsdomäner i inställningarna
+    integrations: frozenset[str] = frozenset()  # integrationer i inställningarna
+    tags: frozenset[str] = frozenset()          # forumtaggar
+    words: re.Pattern | None = None             # namn och början av beskrivningen
+
+
+def _rule(actions=(), triggers=(), events=(), domains=(), integrations=(), tags=(), words=None):
+    return CategoryRule(frozenset(actions), frozenset(triggers), frozenset(events),
+                        frozenset(domains), frozenset(integrations), frozenset(tags),
+                        re.compile(words, re.IGNORECASE) if words else None)
+
+
+# Knappar och fjärrkontroller skickar oftast händelser från sin integration.
+REMOTE_EVENTS = {
+    "zha_event", "deconz_event", "hue_event", "zwave_js_value_notification",
+    "zwave_js_notification", "lutron_caseta_button_event", "shelly.click",
+    "homematic.keypress", "knx_event", "tasmota_event", "rfxtrx_event",
+    "insteon.button_on", "insteon.button_off", "esphome.button_pressed",
+    "nanoleaf_event", "tradfri_event", "xiaomi_aqara.click", "lcn_transponder",
+}
+
+CATEGORY_RULES: dict[str, CategoryRule] = {
+    "lighting": _rule(
+        actions={"light"}, domains={"light"},
+        tags={"lights", "lighting", "automating-lights", "hue", "adaptive-lighting"},
+        words=r"\b(lights?|lamps?|lighting|dimm(?:er|ing)|brightness|illuminance|led strip|"
+              r"licht|lampe|belysning|lampa|lumi[eè]re|luce)\b"),
+    "remotes": _rule(
+        events=REMOTE_EVENTS, domains={"event"},
+        tags={"remote", "remotes", "button", "buttons"},
+        words=r"\b(remotes?|buttons?|remote controllers?|controller\s*[-–:]|dimmer switch|"
+              r"(?:wall|light|scene|wireless|mini|smart) switch|keyboard|tap dial|"
+              r"\d.?(?:gang|channel)|knob|cube|keypad|rotary|styrbar|rodret|tradfri|pico|"
+              r"short.{0,3}press|long.{0,3}press|double.{0,3}(?:press|click|tap)|"
+              r"fernbedienung|taster|schalter)\b"),
+    "notifications": _rule(
+        actions={"notify", "persistent_notification", "telegram_bot", "tts"},
+        events={"mobile_app_notification_action"},
+        tags={"notification", "notifications", "notify", "alerts", "telegram"},
+        words=r"\b(notif\w*|alerts?|alerting|reminders?|announce\w*|nag\w*|telegram|"
+              r"benachrichtigung\w*|notis\w*|påminn\w*)\b"),
+    "climate": _rule(
+        actions={"climate", "fan", "water_heater", "humidifier"},
+        domains={"climate", "fan", "water_heater", "humidifier"},
+        tags={"climate", "heating", "hvac", "thermostat", "ventilation"},
+        words=r"\b(thermostats?|heating|heater|hvac|climate|air.?condition\w*|trv|radiators?|"
+              r"ventilat\w*|humidifier|dehumidifier|fans?|heizung|värme|chauffage)\b"),
+    "energy": _rule(
+        integrations={"nordpool", "tibber", "goodwe", "solaredge", "solax", "solcast_solar",
+                      "forecast_solar", "energidataservice", "entsoe", "octopus_energy",
+                      "growatt_server", "fronius", "enphase_envoy", "huawei_solar", "easee",
+                      "zaptec", "ocpp", "victron"},
+        tags={"energy", "solar", "ev", "ev-charging", "power"},
+        words=r"\b(energy|solar|photovoltaic|pv|electricity|spot ?price|nord ?pool|tibber|"
+              r"charg(?:e|ed|er|ers|ing)|wallbox|kwh|tariff|off.?peak|power consumption|"
+              r"strompreis|strom|elpris)\b"),
+    "security": _rule(
+        actions={"alarm_control_panel", "lock", "camera"},
+        domains={"alarm_control_panel", "lock", "camera"},
+        integrations={"frigate", "alarmo", "reolink", "unifiprotect"},
+        tags={"alarm", "security", "camera", "frigate", "lock", "doorbell"},
+        words=r"\b(alarm|locks?|unlock\w*|cameras?|frigate|intru\w*|burglar|leaks?|"
+              r"smoke|doorbell|security|siren|tamper|larm|(?:door|window|contact) sensors?|"
+              r"(?:doors?|windows?) (?:left )?open)\b"),
+    "presence": _rule(
+        triggers={"zone"}, domains={"person", "zone", "device_tracker"},
+        tags={"presence", "occupancy", "motion"},
+        words=r"\b(presence|occupancy|occupied|motion|movement|arriv\w*|leav(?:e|es|ing)|"
+              r"away|coming home|someone (?:is )?home|nobody (?:is )?home|mmwave|"
+              r"bewegung|anwesenheit|rörelse|närvaro)\b"),
+    "media": _rule(
+        actions={"media_player"}, domains={"media_player"},
+        integrations={"sonos", "cast", "music_assistant", "xbox", "spotify", "plex",
+                      "kodi", "jellyfin", "apple_tv", "androidtv", "androidtv_remote", "webostv",
+                      "samsungtv", "roku", "squeezebox", "bluesound", "denonavr", "yamaha_musiccast"},
+        tags={"media_player", "media", "sonos", "spotify", "tv", "music"},
+        words=r"\b(media|tv|television|music|spotify|sonos|speakers?|radio|playlist|"
+              r"plex|kodi|jellyfin|chromecast|volume)\b"),
+    "covers": _rule(
+        actions={"cover"}, domains={"cover"},
+        tags={"cover", "covers", "blinds", "shutters", "curtains"},
+        words=r"\b(covers?|blinds?|shutters?|curtains?|awnings?|garage door|roller|shades?|"
+              r"rollladen|rolladen|jalousie|markis|persienn\w*|volets?)\b"),
+    "voice_ai": _rule(
+        actions={"conversation", "ai_task", "assist_satellite"},
+        triggers={"conversation"},
+        domains={"assist_satellite", "conversation", "ai_task", "stt", "wake_word"},
+        integrations={"llmvision", "openai_conversation", "google_generative_ai_conversation",
+                      "anthropic", "ollama", "extended_openai_conversation"},
+        tags={"voice-assistants", "voice", "assist", "ai", "llm", "openai"},
+        words=r"\b(voice|assist|llms?|openai|chat ?gpt|gemini|claude|ollama|ai|"
+              r"sentences?|wake ?word)\b"),
+    "maintenance": _rule(
+        actions={"update", "backup", "hassio.backup_full", "hassio.backup_partial"},
+        domains={"update"},
+        tags={"battery", "maintenance", "monitoring"},
+        words=r"\b(batter(?:y|ies)|low battery|unavailable|offline|backups?|firmware|"
+              r"updates? available|watchdog|health ?check|batterie\w*)\b"),
+    "schedule": _rule(
+        triggers={"time", "time_pattern", "calendar"},
+        domains={"schedule", "calendar", "input_datetime"},
+        tags={"time", "schedule", "calendar", "scheduler"},
+        words=r"\b(schedul\w*|calendar|daily|weekdays?|weekends?|wake.?up|alarm clock|"
+              r"bedtime|timetable|sunrise|sunset|zeitplan|schema)\b"),
+}
+CATEGORY_ORDER = list(CATEGORY_RULES)
+
+# Bara början av beskrivningen: längre ner står ofta saker som "kräver
+# mobilappen" eller "fungerar även med lampor", som inte säger vad den gör.
+_DESCRIPTION_CHARS = 300
+
+
+def blueprint_signals(data: dict) -> tuple[set[str], set[str], set[str]]:
+    """Tjänster, utlösartyper och händelsetyper som blueprinten använder."""
+    actions: set[str] = set()
+    triggers: set[str] = set()
+    events: set[str] = set()
+    for key, value in _walk_values({k: v for k, v in data.items() if k != "blueprint"}):
+        if not isinstance(value, str):
+            continue
+        value = value.strip().lower()
+        if key in ("action", "service") and "." in value:
+            actions.add(value)
+        elif key in ("trigger", "platform") and value and " " not in value:
+            triggers.add(value)
+        elif key == "event_type" and value:
+            events.add(value)
+    return actions, triggers, events
+
+
+def categories(data: dict, domains: set[str], integrations: set[str]) -> list[str]:
+    """Vilka sorters automation blueprinten hör till (kan vara flera).
+    Forumtaggarna läggs till separat med categories_from_tags()."""
+    bp = data.get("blueprint") or {}
+    actions, triggers, events = blueprint_signals(data)
+    action_domains = {a.split(".", 1)[0] for a in actions}
+    text = f"{bp.get('name') or ''} {str(bp.get('description') or '')[:_DESCRIPTION_CHARS]}"
+    found = []
+    for cat, rule in CATEGORY_RULES.items():
+        if ((action_domains | actions) & rule.actions
+                or triggers & rule.triggers
+                or events & rule.events
+                or domains & rule.domains
+                or integrations & rule.integrations
+                or (rule.words and rule.words.search(text))):
+            found.append(cat)
+    return found
+
+
+def categories_from_tags(tags: list[str]) -> list[str]:
+    tag_set = {str(t).lower() for t in tags}
+    return [cat for cat, rule in CATEGORY_RULES.items() if tag_set & rule.tags]
+
+
+def merge_categories(*lists: list[str]) -> list[str]:
+    found = {c for lst in lists for c in lst}
+    return [c for c in CATEGORY_ORDER if c in found]
+
+
 def describe_blueprint(text: str) -> dict:
     data = parse_yaml(text)
     bp = data.get("blueprint")
@@ -359,6 +532,7 @@ def describe_blueprint(text: str) -> dict:
         "requires_integrations": sorted(integrations),
         "requires_domains": sorted(domains),
         "sensitive": sensitive_categories(data, domains),
+        "categories": categories(data, domains, integrations),
         "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
     }
 
@@ -410,9 +584,10 @@ def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None,
         topic_url = f"{FORUM}/t/{t.get('slug', 'topic')}/{topic_id}"
 
         cached = cache.get(topic_id)
-        # Poster från en äldre katalog utan "sensitive" läses om en gång.
+        # Poster från en äldre katalog utan "sensitive" eller "categories"
+        # läses om en gång.
         if (cached and cached[0]["topic"].get("bumped_at") == t.get("bumped_at")
-                and all("sensitive" in bp for bp in cached)):
+                and all("sensitive" in bp and "categories" in bp for bp in cached)):
             for bp in cached:
                 if bp["source_url"] not in seen_sources:
                     seen_sources.add(bp["source_url"])
@@ -442,6 +617,9 @@ def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None,
                                    "stage": "blueprint", "error": str(exc)[:300]})
                 continue
             seen_sources.add(src)
+            tags = [x if isinstance(x, str) else x.get("name")
+                    for x in topic.get("tags") or t.get("tags") or []]
+            meta["categories"] = merge_categories(meta["categories"], categories_from_tags(tags))
             res.blueprints.append({
                 "id": hashlib.sha1(src.encode()).hexdigest()[:12],
                 "source_url": src,
@@ -451,8 +629,7 @@ def build_index(fetch: Fetcher, max_pages: int, previous: dict | None = None,
                     "id": topic_id,
                     "url": topic_url,
                     "title": topic.get("title") or t.get("title"),
-                    "tags": [x if isinstance(x, str) else x.get("name")
-                             for x in topic.get("tags") or t.get("tags") or []],
+                    "tags": tags,
                     "likes": topic.get("like_count", t.get("like_count", 0)),
                     "views": topic.get("views", t.get("views", 0)),
                     "created_at": topic.get("created_at", t.get("created_at")),

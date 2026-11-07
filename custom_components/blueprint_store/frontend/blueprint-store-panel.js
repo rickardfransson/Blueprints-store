@@ -12,12 +12,37 @@
 
 const PAGE_SIZE = 60;
 
+// Kategorierna sätts av indexeraren (indexer/build_index.py, CATEGORY_RULES).
+// "other" är butikens egen: blueprints som inte hamnade i någon kategori.
+const CATEGORY_ICONS = {
+  lighting: "💡", remotes: "🎛️", notifications: "🔔", climate: "🌡️", energy: "⚡",
+  security: "🛡️", presence: "🚶", media: "🎵", covers: "🪟", voice_ai: "🎙️",
+  maintenance: "🔧", schedule: "🕒", other: "📦",
+};
+
 const TRANSLATIONS = {
   en: {
     domains: { automation: "Automation", script: "Script", template: "Template" },
     searchPlaceholder: 'Search, e.g. "motion light" or "zha"',
     refresh: "Download the catalog again",
     allTypes: "All types",
+    allCategories: "All",
+    categoriesLabel: "Category",
+    categories: {
+      lighting: "Lighting",
+      remotes: "Buttons & remotes",
+      notifications: "Notifications",
+      climate: "Climate",
+      energy: "Energy",
+      security: "Security",
+      presence: "Presence & motion",
+      media: "Media",
+      covers: "Blinds & covers",
+      voice_ai: "Voice & AI",
+      maintenance: "Maintenance",
+      schedule: "Time & schedules",
+      other: "Other",
+    },
     sortPopular: "Most popular",
     sortRecent: "Recently updated",
     sortName: "Name A–Z",
@@ -131,6 +156,23 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Sök, t.ex. "rörelse lampa" eller "zha"',
     refresh: "Hämta katalogen igen",
     allTypes: "Alla typer",
+    allCategories: "Alla",
+    categoriesLabel: "Kategori",
+    categories: {
+      lighting: "Belysning",
+      remotes: "Knappar & fjärrkontroller",
+      notifications: "Notiser",
+      climate: "Klimat",
+      energy: "Energi",
+      security: "Säkerhet",
+      presence: "Närvaro & rörelse",
+      media: "Media",
+      covers: "Gardiner & portar",
+      voice_ai: "Röst & AI",
+      maintenance: "Underhåll",
+      schedule: "Tid & schema",
+      other: "Övrigt",
+    },
     sortPopular: "Populärast",
     sortRecent: "Senast uppdaterade",
     sortName: "Namn A–Ö",
@@ -373,7 +415,7 @@ class BlueprintStorePanel extends HTMLElement {
     this._loading = true;
     this._error = null;
     this._shown = PAGE_SIZE;
-    this._filters = { q: "", domain: "", fits: true, installed: false, favorites: false, fresh: false, sort: "popular" };
+    this._filters = { q: "", domain: "", category: "", fits: true, installed: false, favorites: false, fresh: false, sort: "popular" };
     this._favorites = new Set();
     this._lastVisit = null;  // förra besöket, avgör vad som är "nytt"
     this._built = false;
@@ -462,10 +504,18 @@ class BlueprintStorePanel extends HTMLElement {
     return { missing, versionOk, ok: versionOk && missing.length === 0 };
   }
 
-  _filtered() {
+  // Katalogen kan vara äldre än kategorierna. Då visas inga kategorier alls.
+  _hasCategories() { return this._items.some((bp) => Array.isArray(bp.categories)); }
+
+  _categoriesOf(bp) { return bp.categories?.length ? bp.categories : ["other"]; }
+
+  // Alla filter utom kategorin. Kategoriraden räknar på det här, så att
+  // siffrorna stämmer med de andra valen.
+  _filteredExceptCategory() {
     const f = this._filters;
     const words = f.q.toLowerCase().split(/\s+/).filter(Boolean);
-    const list = this._items.filter((bp) => {
+    const catLabels = this.t.categories;
+    return this._items.filter((bp) => {
       if (f.domain && bp.domain !== f.domain) return false;
       if (f.installed && !bp.installed) return false;
       if (f.favorites && !this._favorites.has(bp.source_url)) return false;
@@ -475,9 +525,17 @@ class BlueprintStorePanel extends HTMLElement {
       const hay = [
         bp.name, bp.description, bp.topic?.title, bp.author, bp.topic?.poster,
         ...(bp.topic?.tags || []), ...(bp.requires_integrations || []),
+        ...(bp.categories || []).map((c) => catLabels[c]),
       ].join(" ").toLowerCase();
       return words.every((w) => hay.includes(w));
     });
+  }
+
+  _filtered(base = this._filteredExceptCategory()) {
+    const f = this._filters;
+    const list = f.category && this._hasCategories()
+      ? base.filter((bp) => this._categoriesOf(bp).includes(f.category))
+      : [...base];
     const collator = new Intl.Collator(this._lang);
     const by = {
       popular: (a, b) => (b.topic?.likes || 0) - (a.topic?.likes || 0),
@@ -557,6 +615,7 @@ class BlueprintStorePanel extends HTMLElement {
               h("span"))),
           ),
         ),
+        (this._catRow = h("div", { class: "cats", role: "group", "aria-label": t.categoriesLabel })),
         (this._status = h("div", { class: "status" })),
         (this._grid = h("div", { class: "grid" })),
         (this._more = h("div", { class: "more" })),
@@ -572,6 +631,7 @@ class BlueprintStorePanel extends HTMLElement {
     const t = this.t;
     this._grid.textContent = "";
     this._more.textContent = "";
+    this._catRow.textContent = "";
     if (this._loading) {
       this._status.textContent = t.loading;
       return;
@@ -583,7 +643,9 @@ class BlueprintStorePanel extends HTMLElement {
     const fresh = this._items.filter((bp) => this._isNew(bp) || this._isChanged(bp)).length;
     this._freshLabel.hidden = !fresh && !this._filters.fresh;
     this._freshLabel.querySelector("span").textContent = this.t.onlyNew(fresh);
-    const list = this._filtered();
+    const base = this._filteredExceptCategory();
+    this._renderCategories(base);
+    const list = this._filtered(base);
     const updated = this._meta.generated_at ? t.catalogUpdated(this._date(this._meta.generated_at)) : "";
     this._status.textContent = t.count(list.length, this._items.length) + updated;
     if (!list.length) {
@@ -593,6 +655,28 @@ class BlueprintStorePanel extends HTMLElement {
     this._list = list;
     for (const bp of list.slice(0, this._shown)) this._grid.append(this._card(bp));
     this._renderMore();
+  }
+
+  _renderCategories(base) {
+    if (!this._hasCategories()) return;
+    const t = this.t;
+    const f = this._filters;
+    const counts = {};
+    for (const bp of base) for (const c of this._categoriesOf(bp)) counts[c] = (counts[c] || 0) + 1;
+    const pick = (value) => () => {
+      f.category = f.category === value ? "" : value;
+      this._shown = PAGE_SIZE;
+      this._renderList();
+    };
+    const chip = (value, label, n) => h("button", {
+      class: "cat", "aria-pressed": String(f.category === value), onclick: pick(value),
+    }, label, n === undefined ? null : h("span", { class: "n" }, String(n)));
+    this._catRow.append(chip("", t.allCategories));
+    // Tomma kategorier döljs, utom den som är vald (annars går den inte att välja bort).
+    for (const c of Object.keys(CATEGORY_ICONS)) {
+      if (!counts[c] && f.category !== c) continue;
+      this._catRow.append(chip(c, `${CATEGORY_ICONS[c]} ${t.categories[c] || c}`, counts[c] || 0));
+    }
   }
 
   // "Visa fler" lägger bara till nya kort under de som redan finns. Att bygga
@@ -753,6 +837,8 @@ class BlueprintStorePanel extends HTMLElement {
       h("div", { class: "dlg-head" },
         h("div", {},
           h("span", { class: "chip" }, t.domains[bp.domain] || bp.domain),
+          ...(bp.categories || []).filter((c) => t.categories[c])
+            .map((c) => [" ", h("span", { class: "chip" }, `${CATEGORY_ICONS[c]} ${t.categories[c]}`)]).flat(),
           " ", this._freshBadge(bp),
           h("h2", {}, bp.name || bp.topic?.title || t.untitled),
           h("div", { class: "sub" },
@@ -967,6 +1053,18 @@ const STYLES = `
   .search, select { font: inherit; color: inherit; background: var(--card-background-color); border: 1px solid var(--divider-color);
                     border-radius: 8px; padding: 10px 12px; }
   .search { width: 100%; box-sizing: border-box; font-size: 16px; }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
+  .cat { font: inherit; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+         padding: 6px 12px; border-radius: 16px; border: 1px solid var(--divider-color);
+         background: var(--card-background-color); color: var(--primary-text-color); white-space: nowrap; }
+  .cat:hover { border-color: var(--primary-color); }
+  .cat:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 1px; }
+  .cat[aria-pressed="true"] { background: var(--primary-color, #03a9f4); border-color: var(--primary-color, #03a9f4);
+                              color: var(--text-primary-color, #fff); }
+  .cat .n { font-size: 12px; opacity: .7; }
+  /* På mobil blir raden en rad som går att svepa i sidled. */
+  :host([narrow]) .cats { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 4px -12px 0;
+                          padding: 0 12px 2px; }
   .check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
   .status { color: var(--secondary-text-color); margin: 8px 2px 12px; font-size: 14px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 12px; }

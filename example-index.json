@@ -46,6 +46,10 @@
     "light"
    ],
    "sensitive": [],
+   "categories": [
+    "lighting",
+    "presence"
+   ],
    "sha256": "1d6f73be56d57316ec3f5d0aad62f974352acf4f6288f75e8babdc935702eb41",
    "topic": {
     "id": 1001,
@@ -83,6 +87,9 @@
    "requires_integrations": [],
    "requires_domains": [],
    "sensitive": [],
+   "categories": [
+    "notifications"
+   ],
    "sha256": "4a35ccf7d6fe0f9717f8329f1e26efbebc92d89093d19327a2058c7d6437ba8a",
    "topic": {
     "id": 1005,
@@ -113,6 +120,7 @@
    "requires_integrations": [],
    "requires_domains": [],
    "sensitive": [],
+   "categories": [],
    "sha256": "d27026bd0e0edb3da2225d53e07a437413f507493cba4b2ef651dd89a9c793d8",
    "topic": {
     "id": 1002,
