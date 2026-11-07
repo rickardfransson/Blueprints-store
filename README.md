@@ -11,6 +11,7 @@ Thousands of blueprints are shared on the [Blueprints Exchange](https://communit
 ## Features
 
 - **Search the whole Blueprints Exchange** by name, description, tag, author or integration (try `motion light` or `zha`).
+- **Browse by category**, such as lighting, buttons and remotes, notifications, climate, energy, security or voice and AI. Each category shows how many blueprints it has, and a blueprint can belong to several.
 - **See only what fits your system.** Blueprints that need a newer version of Home Assistant, or an integration you don't have, are hidden by default.
 - **Read the code before you install.** Every blueprint can be previewed, and the forum thread is one click away.
 - **See what a blueprint can control.** Blueprints that lock doors, arm the alarm, change the heating, open covers, run commands, restart Home Assistant, send web requests or can be started from a webhook get a warning badge, so you know before you install.
@@ -48,7 +49,7 @@ If you installed Blueprint Store through HACS and then update to 2026.11, it mov
 ## Using it
 
 1. Open **Blueprint Store** from the sidebar.
-2. Search or filter by type (automation, script or template). Sort by most popular, recently updated or name.
+2. Search, pick a category, or filter by type (automation, script or template). Sort by most popular, recently updated or name.
 3. Click a blueprint to see its description, its requirements and the settings you'll be asked for.
 4. Click **Show code** if you want to read it, then **Install**.
 5. Go to **Settings → Automations & scenes → Blueprints** and create an automation from it, as you would with any other blueprint.
@@ -115,7 +116,7 @@ Taking a backup before trying any new integration is always a good idea.
 
 ## How it works
 
-A script runs every night on GitHub. It reads the Blueprints Exchange, finds each thread's **Import blueprint** link, downloads the blueprint and records its name, description, requirements, which sensitive actions it uses, when it was added to the catalog, when its code last changed, and a fingerprint of its contents. The result is published as a single file:
+A script runs every night on GitHub. It reads the Blueprints Exchange, finds each thread's **Import blueprint** link, downloads the blueprint and records its name, description, requirements, which sensitive actions it uses, which categories it belongs to, when it was added to the catalog, when its code last changed, and a fingerprint of its contents. The result is published as a single file:
 
 https://rickardfransson.github.io/Blueprints-store/index.json
 

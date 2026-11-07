@@ -33,6 +33,10 @@ def main(path: str) -> None:
     print("\n### Per typ\n")
     for k, v in collections.Counter(b["domain"] for b in bps).most_common():
         print(f"- {k}: {v}")
+    print("\n### Per kategori\n")
+    cats = collections.Counter(c for b in bps for c in b.get("categories") or ["(ingen)"])
+    for k, v in cats.most_common():
+        print(f"- {k}: {v}")
     print("\n### Per källa\n")
     for k, v in collections.Counter(b["source_type"] for b in bps).most_common():
         print(f"- {k}: {v}")
