@@ -22,6 +22,20 @@ Thousands of blueprints are shared on the [Blueprints Exchange](https://communit
 - **Nothing happens on its own.** Blueprints are only installed or updated when you click the button.
 - **English and Swedish.** The store page follows the language set in your Home Assistant profile. Other languages fall back to English. Translations are welcome: copy the `en` block at the top of `frontend/blueprint-store-panel.js` and send a pull request.
 
+## Screenshots
+
+**Browse by category.** Search or pick a category to narrow down the catalog.
+
+<img src="https://raw.githubusercontent.com/rickardfransson/Blueprints-store/main/screenshots/browse.png" alt="The Blueprint Store page with the Security category selected" width="800">
+
+**Know what you install.** The details show what the blueprint can control, what it needs and which settings you'll be asked for.
+
+<img src="https://raw.githubusercontent.com/rickardfransson/Blueprints-store/main/screenshots/details.png" alt="Details for a blueprint with a warning that it can be triggered from outside" width="800">
+
+**Read the code first.** Every blueprint can be previewed before you click Install.
+
+<img src="https://raw.githubusercontent.com/rickardfransson/Blueprints-store/main/screenshots/code.png" alt="The blueprint's code shown below its requirements and settings" width="800">
+
 ## Installation
 
 You need Home Assistant 2025.1 or newer.
