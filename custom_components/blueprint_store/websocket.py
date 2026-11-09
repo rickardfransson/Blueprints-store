@@ -24,6 +24,7 @@ def async_register(hass: HomeAssistant) -> None:
 
 
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list"})
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_list(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
     store = _store(hass)
