@@ -230,3 +230,24 @@ async def test_blueprint_in_use_is_listed_and_cannot_be_removed(
     assert not res["success"] and res["error"]["code"] == "in_use"
     path = Path(hass.config.path("blueprints", "automation", installed["path"]))
     assert await hass.async_add_executor_job(path.exists)
+
+
+async def test_all_commands_require_admin(
+    hass, aioclient_mock, hass_ws_client, hass_read_only_access_token, base_components
+) -> None:
+    """En användare som inte är admin får inte anropa något av kommandona."""
+    await _setup(hass, aioclient_mock)
+    ws = await hass_ws_client(hass, hass_read_only_access_token)
+    commands = [
+        {"type": f"{DOMAIN}/list"},
+        {"type": f"{DOMAIN}/preview", "source_url": MOTION_URL},
+        {"type": f"{DOMAIN}/diff", "source_url": MOTION_URL},
+        {"type": f"{DOMAIN}/install", "source_url": MOTION_URL},
+        {"type": f"{DOMAIN}/remove", "source_url": MOTION_URL},
+        {"type": f"{DOMAIN}/refresh"},
+    ]
+    for msg_id, command in enumerate(commands, start=1):
+        await ws.send_json({"id": msg_id, **command})
+        res = await ws.receive_json()
+        assert not res["success"], command
+        assert res["error"]["code"] == "unauthorized", command
