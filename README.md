@@ -42,8 +42,8 @@ You need Home Assistant 2025.1 or newer.
 
 **Home Assistant 2026.11 or newer (Marketplace)**
 
-1. Click the button above, or add the repository yourself: go to **Settings → Marketplace**, select **Add from link** in the upper-right corner, enter `rickardfransson/Blueprints-store` and select **Add**. The Marketplace needs to be connected to GitHub before you can add a repository.
-2. Open **Blueprint Store** in the Marketplace and select **Install**.
+1. Go to **Settings → Marketplace** and search for **Blueprint Store**, or click the button above.
+2. Open **Blueprint Store** and select **Install**.
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration** and pick **Blueprint Store**.
 
@@ -51,8 +51,8 @@ You need Home Assistant 2025.1 or newer.
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rickardfransson&repository=Blueprints-store&category=integration)
 
-1. Click the button above, or in HACS open the ⋮ menu → **Custom repositories**, paste `https://github.com/rickardfransson/Blueprints-store`, choose **Integration** and click **Add**.
-2. Find **Blueprint Store** in HACS and click **Download**.
+1. Open HACS and search for **Blueprint Store**, or click the button above.
+2. Open **Blueprint Store** and click **Download**.
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration** and pick **Blueprint Store**.
 
